@@ -1,0 +1,24 @@
+# tmuxicate runtime state
+.tmuxicate/
+
+# Go
+/tmuxicate
+*.exe
+*.test
+*.out
+/dist/
+/bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
