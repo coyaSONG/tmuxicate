@@ -14,7 +14,7 @@ type CodexAdapter struct {
 }
 
 func NewCodexAdapter(client tmux.Client, paneID string) (*CodexAdapter, error) {
-	g, err := NewGenericAdapter(client, paneID, GenericConfig{
+	g, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		ReadyRegex:    `(?m)^›(?:\s|$)`,
 		QuietPeriod:   1500 * time.Millisecond,
 		BootstrapMode: BootstrapModeArg,

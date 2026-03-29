@@ -67,7 +67,7 @@ func Reply(stateDir string, store *mailbox.Store, agent string, parentID protoco
 		RequiresAck: true,
 	}
 
-	if err := store.CreateMessage(env, payload); err != nil {
+	if err := store.CreateMessage(&env, payload); err != nil {
 		return "", err
 	}
 
@@ -80,7 +80,7 @@ func Reply(stateDir string, store *mailbox.Store, agent string, parentID protoco
 		Revision:       0,
 		NotifyAttempts: 0,
 	}
-	if err := store.CreateReceipt(receipt); err != nil {
+	if err := store.CreateReceipt(&receipt); err != nil {
 		return "", err
 	}
 

@@ -9,7 +9,7 @@ import (
 func NewAdapter(adapterType string, client tmux.Client, paneID string) (Adapter, error) {
 	switch adapterType {
 	case "generic":
-		return NewGenericAdapter(client, paneID, GenericConfig{})
+		return NewGenericAdapter(client, paneID, &GenericConfig{})
 	case "claude-code":
 		return NewClaudeCodeAdapter(client, paneID)
 	case "codex":

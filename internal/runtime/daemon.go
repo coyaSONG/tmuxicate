@@ -171,7 +171,7 @@ func (d *Daemon) buildAdapters() map[string]adapter.Adapter {
 			adapterCfg.QuietPeriod = 1200 * time.Millisecond
 		}
 
-		a, err := adapter.NewGenericAdapter(d.tmux, paneID, adapterCfg)
+		a, err := adapter.NewGenericAdapter(d.tmux, paneID, &adapterCfg)
 		if err != nil {
 			d.logEvent("ERROR", "adapter.create", map[string]any{
 				"agent": agentCfg.Name,

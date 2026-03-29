@@ -91,7 +91,7 @@ func Send(stateDir string, store *mailbox.Store, to string, body string, opts Se
 		ReplyTo:     opts.ReplyTo,
 	}
 
-	if err := store.CreateMessage(env, payload); err != nil {
+	if err := store.CreateMessage(&env, payload); err != nil {
 		return "", err
 	}
 
@@ -104,7 +104,7 @@ func Send(stateDir string, store *mailbox.Store, to string, body string, opts Se
 		Revision:       0,
 		NotifyAttempts: 0,
 	}
-	if err := store.CreateReceipt(receipt); err != nil {
+	if err := store.CreateReceipt(&receipt); err != nil {
 		return "", err
 	}
 

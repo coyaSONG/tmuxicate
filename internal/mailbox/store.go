@@ -22,7 +22,7 @@ func NewStore(stateDir string) *Store {
 	return &Store{stateDir: SessionDir(stateDir)}
 }
 
-func (s *Store) CreateMessage(env protocol.Envelope, body []byte) error {
+func (s *Store) CreateMessage(env *protocol.Envelope, body []byte) error {
 	if err := env.Validate(); err != nil {
 		return fmt.Errorf("validate envelope: %w", err)
 	}
@@ -110,14 +110,14 @@ func (s *Store) ReadMessage(msgID protocol.MessageID) (*protocol.Envelope, []byt
 	if err != nil {
 		return nil, nil, fmt.Errorf("read body: %w", err)
 	}
-	if err := validateBody(env, body); err != nil {
+	if err := validateBody(&env, body); err != nil {
 		return nil, nil, err
 	}
 
 	return &env, body, nil
 }
 
-func (s *Store) CreateReceipt(receipt protocol.Receipt) error {
+func (s *Store) CreateReceipt(receipt *protocol.Receipt) error {
 	if err := receipt.Validate(); err != nil {
 		return fmt.Errorf("validate receipt: %w", err)
 	}
@@ -175,7 +175,7 @@ func (s *Store) UpdateReceipt(agent string, msgID protocol.MessageID, fn func(*p
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock() }()
 
 	path, folder, err := s.findReceiptPath(agent, msgID)
 	if err != nil {
@@ -200,7 +200,7 @@ func (s *Store) UpdateReceipt(agent string, msgID protocol.MessageID, fn func(*p
 		return fmt.Errorf("validate updated receipt: %w", err)
 	}
 
-	return s.writeReceiptAtPath(path, *receipt)
+	return s.writeReceiptAtPath(path, receipt)
 }
 
 func (s *Store) MoveReceipt(agent string, msgID protocol.MessageID, from, to protocol.FolderState) error {
@@ -208,7 +208,7 @@ func (s *Store) MoveReceipt(agent string, msgID protocol.MessageID, from, to pro
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { _ = unlock() }()
 
 	path, folder, err := s.findReceiptPath(agent, msgID)
 	if err != nil {
@@ -230,8 +230,8 @@ func (s *Store) MoveReceipt(agent string, msgID protocol.MessageID, from, to pro
 	if err := ensureDir(InboxDir(s.stateDir, agent, to)); err != nil {
 		return err
 	}
-	dst := ReceiptPath(s.stateDir, agent, to, *receipt)
-	if err := s.writeReceiptAtPath(dst, *receipt); err != nil {
+	dst := ReceiptPath(s.stateDir, agent, to, receipt)
+	if err := s.writeReceiptAtPath(dst, receipt); err != nil {
 		return err
 	}
 	if err := os.Remove(path); err != nil {
@@ -252,7 +252,7 @@ func (s *Store) AllocateSeq() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer unlock()
+	defer func() { _ = unlock() }()
 
 	if err := ensureDir(StateDir(s.stateDir)); err != nil {
 		return 0, err
@@ -326,7 +326,7 @@ func (s *Store) readReceiptFile(path string) (*protocol.Receipt, error) {
 	return &receipt, nil
 }
 
-func (s *Store) writeReceiptAtPath(path string, receipt protocol.Receipt) error {
+func (s *Store) writeReceiptAtPath(path string, receipt *protocol.Receipt) error {
 	data, err := yaml.Marshal(receipt)
 	if err != nil {
 		return fmt.Errorf("marshal receipt: %w", err)
@@ -351,7 +351,7 @@ func (s *Store) lockReceipt(agent string, msgID protocol.MessageID) (func() erro
 	return flockPath(ReceiptLockPath(s.stateDir, agent, msgID))
 }
 
-func validateBody(env protocol.Envelope, body []byte) error {
+func validateBody(env *protocol.Envelope, body []byte) error {
 	sum := sha256.Sum256(body)
 	gotSHA := fmt.Sprintf("%x", sum[:])
 	if env.BodySHA256 != gotSHA {

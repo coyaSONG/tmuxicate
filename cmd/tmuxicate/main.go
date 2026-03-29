@@ -202,19 +202,19 @@ func newInboxCmd() *cobra.Command {
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "SEQ\tPRI\tSTATE\tKIND\tFROM\tTHREAD\tAGE\tSUBJECT")
-			for _, entry := range entries {
-				subject := entry.Subject
+			for i := range entries {
+				subject := entries[i].Subject
 				if subject == "" {
 					subject = "-"
 				}
 				fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					entry.Seq,
-					entry.Priority,
-					entry.State,
-					entry.Kind,
-					entry.From,
-					entry.Thread,
-					formatAge(entry.Age),
+					entries[i].Seq,
+					entries[i].Priority,
+					entries[i].State,
+					entries[i].Kind,
+					entries[i].From,
+					entries[i].Thread,
+					formatAge(entries[i].Age),
 					subject,
 				)
 			}
@@ -871,14 +871,6 @@ func printStatusReport(report *session.StatusReport) {
 
 func filepathJoin(elem ...string) string {
 	return strings.Join(elem, string(os.PathSeparator))
-}
-
-func newStubCmd(use, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   use,
-		Short: short,
-		Run:   stubRun,
-	}
 }
 
 func stubRun(_ *cobra.Command, _ []string) {

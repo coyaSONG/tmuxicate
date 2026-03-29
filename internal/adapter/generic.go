@@ -41,11 +41,11 @@ type GenericAdapter struct {
 	lastChanged  time.Time
 }
 
-func NewGenericAdapter(client tmux.Client, paneID string, cfg GenericConfig) (*GenericAdapter, error) {
+func NewGenericAdapter(client tmux.Client, paneID string, cfg *GenericConfig) (*GenericAdapter, error) {
 	adapter := &GenericAdapter{
 		tmux:        client,
 		paneID:      paneID,
-		cfg:         cfg,
+		cfg:         *cfg,
 		lastChanged: time.Now(),
 	}
 

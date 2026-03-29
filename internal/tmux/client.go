@@ -17,7 +17,7 @@ type Client interface {
 	HasSession(ctx context.Context, session string) (bool, error)
 	KillSession(ctx context.Context, session string) error
 	SelectLayout(ctx context.Context, window, layout string) error
-	DisplayPopup(ctx context.Context, spec PopupSpec) error
+	DisplayPopup(ctx context.Context, spec *PopupSpec) error
 	SetPaneTitle(ctx context.Context, paneID, title string) error
 }
 

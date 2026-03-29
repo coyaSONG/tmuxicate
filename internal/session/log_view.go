@@ -30,12 +30,6 @@ type logEntry struct {
 	Line      string
 }
 
-type eventLine struct {
-	Timestamp string `json:"ts"`
-	Event     string `json:"event"`
-	Schema    string `json:"schema"`
-}
-
 var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
 func LogView(stateDir string, agent string, opts LogOpts) error {
@@ -378,8 +372,8 @@ func formatLogEntry(entry logEntry, includeAgent bool) string {
 func logAgents(cfg *config.ResolvedConfig, requested string, all bool) ([]string, error) {
 	if all {
 		agents := make([]string, 0, len(cfg.Agents))
-		for _, agent := range cfg.Agents {
-			agents = append(agents, agent.Name)
+		for i := range cfg.Agents {
+			agents = append(agents, cfg.Agents[i].Name)
 		}
 		return agents, nil
 	}

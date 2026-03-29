@@ -297,7 +297,7 @@ func (f *FakeClient) SelectLayout(_ context.Context, window, layout string) erro
 	return nil
 }
 
-func (f *FakeClient) DisplayPopup(_ context.Context, spec PopupSpec) error {
+func (f *FakeClient) DisplayPopup(_ context.Context, spec *PopupSpec) error {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 
@@ -308,7 +308,7 @@ func (f *FakeClient) DisplayPopup(_ context.Context, spec PopupSpec) error {
 		return f.Err
 	}
 
-	f.DisplayPopupCalls = append(f.DisplayPopupCalls, spec)
+	f.DisplayPopupCalls = append(f.DisplayPopupCalls, *spec)
 	return nil
 }
 

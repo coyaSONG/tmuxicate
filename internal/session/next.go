@@ -24,9 +24,9 @@ func Next(stateDir, agent string) (*ReadResult, error) {
 		return nil, err
 	}
 
-	for _, entry := range entries {
-		if entry.State == protocol.FolderStateUnread {
-			return ReadMsg(stateDir, agentName, entry.MessageID)
+	for i := range entries {
+		if entries[i].State == protocol.FolderStateUnread {
+			return ReadMsg(stateDir, agentName, entries[i].MessageID)
 		}
 	}
 

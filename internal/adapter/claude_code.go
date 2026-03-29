@@ -14,7 +14,7 @@ type ClaudeCodeAdapter struct {
 }
 
 func NewClaudeCodeAdapter(client tmux.Client, paneID string) (*ClaudeCodeAdapter, error) {
-	g, err := NewGenericAdapter(client, paneID, GenericConfig{
+	g, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		ReadyRegex:    `(?m)^❯\s*$`,
 		QuietPeriod:   1200 * time.Millisecond,
 		BootstrapMode: BootstrapModeArg,

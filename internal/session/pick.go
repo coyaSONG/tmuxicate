@@ -101,7 +101,7 @@ func Pick(stateDir string, client tmux.Client, opts PickOpts) error {
 	}
 
 	ctx := context.Background()
-	return client.DisplayPopup(ctx, tmux.PopupSpec{
+	return client.DisplayPopup(ctx, &tmux.PopupSpec{
 		TargetPane: targetPane,
 		Title:      " pick agent ",
 		Width:      "80%",
@@ -139,7 +139,8 @@ func ListPanes(stateDir string, client tmux.Client, opts ListPanesOpts) (string,
 	}
 
 	var lines []string
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		paneID := coalescePaneID(livePaneIDs[agent.Name], paneIDs[agent.Name])
 
 		observed, _, _ := readObservedState(filepath.Join(stateDir, "agents", agent.Name, "events", "observed.current.json"))

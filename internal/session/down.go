@@ -26,8 +26,8 @@ func Down(stateDir string, tmuxClient tmux.Client, force bool) error {
 	}
 
 	if !force {
-		for _, pane := range panes {
-			_ = tmuxClient.SendKeys(backgroundCtx(), pane.PaneID, "[tmuxicate] Session shutting down in 10s. Persist any needed reply with tmuxicate now.", true)
+		for i := range panes {
+			_ = tmuxClient.SendKeys(backgroundCtx(), panes[i].PaneID, "[tmuxicate] Session shutting down in 10s. Persist any needed reply with tmuxicate now.", true)
 		}
 		time.Sleep(10 * time.Second)
 	}

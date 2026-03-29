@@ -67,7 +67,8 @@ func Up(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 }
 
 func createStateTree(cfg *config.ResolvedConfig) error {
-	dirs := []string{
+	dirs := make([]string, 0, 9+len(cfg.Agents)*9)
+	dirs = append(dirs,
 		cfg.Session.StateDir,
 		filepath.Join(cfg.Session.StateDir, "logs"),
 		filepath.Join(cfg.Session.StateDir, "runtime"),
@@ -77,7 +78,7 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 		mailbox.OrphanedMessagesDir(cfg.Session.StateDir),
 		mailbox.LocksDir(cfg.Session.StateDir),
 		filepath.Join(cfg.Session.StateDir, "locks", "receipts"),
-	}
+	)
 
 	for _, agent := range cfg.Agents {
 		dirs = append(dirs,
@@ -117,7 +118,8 @@ func writeResolvedConfig(cfg *config.ResolvedConfig) error {
 }
 
 func generateAgentArtifacts(cfg *config.ResolvedConfig) error {
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		agentDir := mailbox.AgentDir(cfg.Session.StateDir, agent.Name)
 		bootstrapPath := filepath.Join(agentDir, "adapter", "bootstrap.txt")
 		runPath := filepath.Join(agentDir, "adapter", "run.sh")
@@ -199,13 +201,11 @@ func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs
 			paneIDs[agent.Name] = paneID
 			rightTopPaneID = paneID
 		case "right-bottom":
-			target := rightTopPaneID
-			if target == "" {
-				target = mainPaneID
+			if rightTopPaneID == "" {
 				spec.Direction = "h"
 				spec.Percentage = 35
 			} else {
-				spec.TargetPane = target
+				spec.TargetPane = rightTopPaneID
 				spec.Direction = "v"
 				spec.Percentage = 50
 			}
@@ -339,7 +339,7 @@ func writeReadyFile(cfg *config.ResolvedConfig, paneIDs map[string]string) error
 	return nil
 }
 
-func renderBootstrap(cfg *config.ResolvedConfig, agent config.AgentConfig) string {
+func renderBootstrap(cfg *config.ResolvedConfig, agent *config.AgentConfig) string {
 	var teamLines []string
 	for _, teammateName := range agent.Teammates {
 		for _, teammate := range cfg.Agents {
@@ -387,8 +387,8 @@ Extra instructions
 	return text
 }
 
-func renderRunScript(cfg *config.ResolvedConfig, agent config.AgentConfig, bootstrapPath string) string {
-	var envLines []string
+func renderRunScript(cfg *config.ResolvedConfig, agent *config.AgentConfig, bootstrapPath string) string {
+	envLines := make([]string, 0, len(cfg.Defaults.Env)+4)
 	for k, v := range cfg.Defaults.Env {
 		envLines = append(envLines, fmt.Sprintf("export %s=%q", k, v))
 	}

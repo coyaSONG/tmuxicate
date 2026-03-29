@@ -20,7 +20,7 @@ func TestCreateMessage_AtomicVisibility(t *testing.T) {
 	store := NewStore(t.TempDir())
 	env, body := testEnvelope(142)
 
-	if err := store.CreateMessage(env, body); err != nil {
+	if err := store.CreateMessage(&env, body); err != nil {
 		t.Fatalf("CreateMessage() unexpected error: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestCreateMessage_VerifySHA256(t *testing.T) {
 	store := NewStore(t.TempDir())
 	env, body := testEnvelope(143)
 
-	if err := store.CreateMessage(env, body); err != nil {
+	if err := store.CreateMessage(&env, body); err != nil {
 		t.Fatalf("CreateMessage() unexpected error: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestCreateReceipt_And_MoveReceipt(t *testing.T) {
 	store := NewStore(t.TempDir())
 	receipt := testReceipt(142, protocol.FolderStateUnread)
 
-	if err := store.CreateReceipt(receipt); err != nil {
+	if err := store.CreateReceipt(&receipt); err != nil {
 		t.Fatalf("CreateReceipt() unexpected error: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestUpdateReceipt_RequiresLock(t *testing.T) {
 	now := time.Now().UTC()
 	receipt.AckedAt = &now
 
-	if err := store.CreateReceipt(receipt); err != nil {
+	if err := store.CreateReceipt(&receipt); err != nil {
 		t.Fatalf("CreateReceipt() unexpected error: %v", err)
 	}
 
@@ -236,7 +236,7 @@ func TestReadMessageRoundTrip(t *testing.T) {
 
 	store := NewStore(t.TempDir())
 	env, body := testEnvelope(145)
-	if err := store.CreateMessage(env, body); err != nil {
+	if err := store.CreateMessage(&env, body); err != nil {
 		t.Fatalf("CreateMessage() unexpected error: %v", err)
 	}
 

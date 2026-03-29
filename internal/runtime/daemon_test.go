@@ -145,7 +145,7 @@ func TestDaemonNotifiesUnreadReceipt(t *testing.T) {
 		RequiresAck: true,
 		Subject:     "Review request",
 	}
-	if err := store.CreateMessage(env, body); err != nil {
+	if err := store.CreateMessage(&env, body); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +158,7 @@ func TestDaemonNotifiesUnreadReceipt(t *testing.T) {
 		Revision:       0,
 		NotifyAttempts: 0,
 	}
-	if err := store.CreateReceipt(receipt); err != nil {
+	if err := store.CreateReceipt(&receipt); err != nil {
 		t.Fatal(err)
 	}
 

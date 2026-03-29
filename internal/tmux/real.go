@@ -267,7 +267,7 @@ func (c *RealClient) SelectLayout(ctx context.Context, window, layout string) er
 	return err
 }
 
-func (c *RealClient) DisplayPopup(ctx context.Context, spec PopupSpec) error {
+func (c *RealClient) DisplayPopup(ctx context.Context, spec *PopupSpec) error {
 	args := []string{"display-popup", "-E"}
 	if spec.TargetPane != "" {
 		args = append(args, "-t", spec.TargetPane)

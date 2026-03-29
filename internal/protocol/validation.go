@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (e Envelope) Validate() error {
+func (e *Envelope) Validate() error {
 	if e.Schema != MessageSchemaV1 {
 		return fmt.Errorf("schema must be %q", MessageSchemaV1)
 	}
@@ -87,7 +87,7 @@ func (e Envelope) Validate() error {
 	return nil
 }
 
-func (r Receipt) Validate() error {
+func (r *Receipt) Validate() error {
 	if r.Schema != ReceiptSchemaV1 {
 		return fmt.Errorf("schema must be %q", ReceiptSchemaV1)
 	}

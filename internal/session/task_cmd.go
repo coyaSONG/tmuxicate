@@ -69,7 +69,7 @@ func TaskAccept(stateDir, agent string, msgID protocol.MessageID) error {
 		}
 	}
 
-	return appendStateEvent(stateDir, agentName, TaskEvent{
+	return appendStateEvent(stateDir, agentName, &TaskEvent{
 		Schema:        "tmuxicate/state-event/v1",
 		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Agent:         agentName,
@@ -95,7 +95,7 @@ func TaskWait(stateDir, agent string, msgID protocol.MessageID, on, reason strin
 		return fmt.Errorf("message %s claimed by %s", msgID, *receipt.ClaimedBy)
 	}
 
-	return appendStateEvent(stateDir, agentName, TaskEvent{
+	return appendStateEvent(stateDir, agentName, &TaskEvent{
 		Schema:        "tmuxicate/state-event/v1",
 		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Agent:         agentName,
@@ -126,7 +126,7 @@ func TaskBlock(stateDir, agent string, msgID protocol.MessageID, on, reason stri
 		return fmt.Errorf("message %s claimed by %s", msgID, *receipt.ClaimedBy)
 	}
 
-	return appendStateEvent(stateDir, agentName, TaskEvent{
+	return appendStateEvent(stateDir, agentName, &TaskEvent{
 		Schema:        "tmuxicate/state-event/v1",
 		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Agent:         agentName,
@@ -164,7 +164,7 @@ func TaskDone(stateDir, agent string, msgID protocol.MessageID, summary string) 
 		return err
 	}
 
-	return appendStateEvent(stateDir, agentName, TaskEvent{
+	return appendStateEvent(stateDir, agentName, &TaskEvent{
 		Schema:        "tmuxicate/state-event/v1",
 		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Agent:         agentName,
@@ -214,7 +214,7 @@ func isClaimableKind(kind protocol.Kind) bool {
 	}
 }
 
-func appendStateEvent(stateDir, agent string, event TaskEvent) error {
+func appendStateEvent(stateDir, agent string, event *TaskEvent) error {
 	eventsDir := stateEventsDir(stateDir, agent)
 	if err := os.MkdirAll(eventsDir, 0o755); err != nil {
 		return fmt.Errorf("create events dir: %w", err)

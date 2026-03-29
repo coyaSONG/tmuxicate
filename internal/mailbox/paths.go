@@ -78,11 +78,11 @@ func ReceiptLockPath(stateDir, agent string, msgID protocol.MessageID) string {
 	return filepath.Join(ReceiptLocksDir(stateDir, agent), fmt.Sprintf("%s.lock", msgID))
 }
 
-func ReceiptFileName(receipt protocol.Receipt) string {
+func ReceiptFileName(receipt *protocol.Receipt) string {
 	return fmt.Sprintf("%010d-%s.yaml", receipt.Seq, receipt.MessageID)
 }
 
-func ReceiptPath(stateDir, agent string, folder protocol.FolderState, receipt protocol.Receipt) string {
+func ReceiptPath(stateDir, agent string, folder protocol.FolderState, receipt *protocol.Receipt) string {
 	return filepath.Join(InboxDir(stateDir, agent, folder), ReceiptFileName(receipt))
 }
 

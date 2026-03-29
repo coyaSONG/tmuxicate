@@ -20,7 +20,7 @@ func TestProbe_Ready_WhenQuiet(t *testing.T) {
 	}
 	client.PaneCaptures[paneID] = "READY>"
 
-	adapter, err := NewGenericAdapter(client, paneID, GenericConfig{
+	adapter, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		ReadyRegex:  "READY>",
 		QuietPeriod: 0,
 	})
@@ -48,7 +48,7 @@ func TestProbe_Busy_WhenBusyRegex(t *testing.T) {
 	}
 	client.PaneCaptures[paneID] = "BUSY"
 
-	adapter, err := NewGenericAdapter(client, paneID, GenericConfig{
+	adapter, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		BusyRegex: "BUSY",
 	})
 	if err != nil {
@@ -74,7 +74,7 @@ func TestNotify_OnlyWhenReady(t *testing.T) {
 		t.Fatalf("NewSession() unexpected error: %v", err)
 	}
 
-	adapter, err := NewGenericAdapter(client, paneID, GenericConfig{
+	adapter, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		ReadyRegex:  "READY>",
 		QuietPeriod: 0,
 	})
@@ -109,7 +109,7 @@ func TestBootstrap_PasteMode(t *testing.T) {
 		t.Fatalf("NewSession() unexpected error: %v", err)
 	}
 
-	adapter, err := NewGenericAdapter(client, paneID, GenericConfig{
+	adapter, err := NewGenericAdapter(client, paneID, &GenericConfig{
 		BootstrapMode: BootstrapModePaste,
 		BootstrapText: "tmuxicate bootstrap",
 		QuietPeriod:   10 * time.Millisecond,
