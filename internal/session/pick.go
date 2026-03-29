@@ -129,10 +129,10 @@ func ListPanes(stateDir string, client tmux.Client, opts ListPanesOpts) (string,
 	if hasSession {
 		panes, err := client.ListPanes(ctx, sessionName)
 		if err == nil {
-			for _, pane := range panes {
-				agentName, err := client.ShowPaneOption(ctx, pane.PaneID, "@tmuxicate-agent")
+			for i := range panes {
+				agentName, err := client.ShowPaneOption(ctx, panes[i].PaneID, "@tmuxicate-agent")
 				if err == nil && strings.TrimSpace(agentName) != "" {
-					livePaneIDs[agentName] = pane.PaneID
+					livePaneIDs[agentName] = panes[i].PaneID
 				}
 			}
 		}
@@ -204,9 +204,9 @@ func PreviewPane(stateDir string, client tmux.Client, opts PreviewPaneOpts) (str
 		}
 		panes, err := client.ListPanes(ctx, sessionName)
 		if err == nil {
-			for _, p := range panes {
-				if p.PaneID == paneID {
-					paneTitle = p.PaneTitle
+			for i := range panes {
+				if panes[i].PaneID == paneID {
+					paneTitle = panes[i].PaneTitle
 					break
 				}
 			}

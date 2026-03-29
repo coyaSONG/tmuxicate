@@ -347,9 +347,9 @@ func writeReadyFile(cfg *config.ResolvedConfig, paneIDs map[string]string) error
 func renderBootstrap(cfg *config.ResolvedConfig, agent *config.AgentConfig) string {
 	var teamLines []string
 	for _, teammateName := range agent.Teammates {
-		for _, teammate := range cfg.Agents {
-			if teammate.Name == teammateName {
-				teamLines = append(teamLines, fmt.Sprintf("- %s (alias: %s): %s", teammate.Name, teammate.Alias, teammate.Role))
+		for i := range cfg.Agents {
+			if cfg.Agents[i].Name == teammateName {
+				teamLines = append(teamLines, fmt.Sprintf("- %s (alias: %s): %s", cfg.Agents[i].Name, cfg.Agents[i].Alias, cfg.Agents[i].Role))
 				break
 			}
 		}

@@ -341,8 +341,8 @@ func (f *FakeClient) newPaneID() string {
 
 func (f *FakeClient) findSessionByPane(paneID string) string {
 	for session, panes := range f.PanesBySession {
-		for _, pane := range panes {
-			if pane.PaneID == paneID {
+		for i := range panes {
+			if panes[i].PaneID == paneID {
 				return session
 			}
 		}

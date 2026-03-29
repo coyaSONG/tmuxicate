@@ -178,7 +178,8 @@ func (c *Config) Validate() error {
 
 	knownAgents := make(map[string]struct{}, len(c.Agents))
 	knownAliases := make(map[string]struct{}, len(c.Agents))
-	for i, agent := range c.Agents {
+	for i := range c.Agents {
+		agent := &c.Agents[i]
 		prefix := fmt.Sprintf("agents[%d]", i)
 
 		if strings.TrimSpace(agent.Name) == "" {
@@ -218,8 +219,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("routing.coordinator %q does not match any agent name", c.Routing.Coordinator)
 	}
 
-	for i, agent := range c.Agents {
-		for _, teammate := range agent.Teammates {
+	for i := range c.Agents {
+		for _, teammate := range c.Agents[i].Teammates {
 			if _, ok := knownAgents[teammate]; !ok {
 				return fmt.Errorf("agents[%d].teammates references unknown agent %q", i, teammate)
 			}

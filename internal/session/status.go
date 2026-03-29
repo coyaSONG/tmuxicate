@@ -107,13 +107,13 @@ func Status(stateDir string, tmuxClient tmux.Client) (*StatusReport, error) {
 		if err != nil {
 			return nil, fmt.Errorf("list panes: %w", err)
 		}
-		for _, pane := range panes {
-			agentName, err := tmuxClient.ShowPaneOption(ctx, pane.PaneID, "@tmuxicate-agent")
+		for i := range panes {
+			agentName, err := tmuxClient.ShowPaneOption(ctx, panes[i].PaneID, "@tmuxicate-agent")
 			if err != nil {
-				return nil, fmt.Errorf("show pane option for %s: %w", pane.PaneID, err)
+				return nil, fmt.Errorf("show pane option for %s: %w", panes[i].PaneID, err)
 			}
 			if strings.TrimSpace(agentName) != "" {
-				livePaneIDs[agentName] = pane.PaneID
+				livePaneIDs[agentName] = panes[i].PaneID
 			}
 		}
 	}

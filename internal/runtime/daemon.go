@@ -86,7 +86,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.watcher = watcher
 	defer d.watcher.Close()
 
-	for _, agentCfg := range d.cfg.Agents {
+	for i := range d.cfg.Agents {
+		agentCfg := &d.cfg.Agents[i]
 		dir := mailbox.InboxDir(d.stateDir, agentCfg.Name, protocol.FolderStateUnread)
 		if err := d.watcher.Add(dir); err != nil {
 			return fmt.Errorf("watch unread dir for %s: %w", agentCfg.Name, err)
@@ -150,7 +151,8 @@ func (d *Daemon) buildAdapters() map[string]adapter.Adapter {
 	paneIDs := d.loadPaneIDs()
 	adapters := make(map[string]adapter.Adapter, len(d.cfg.Agents))
 
-	for _, agentCfg := range d.cfg.Agents {
+	for i := range d.cfg.Agents {
+		agentCfg := &d.cfg.Agents[i]
 		paneID := paneIDs[agentCfg.Name]
 		if paneID == "" {
 			continue
@@ -203,7 +205,8 @@ func (d *Daemon) handleFSEvent(ctx context.Context, ev fsnotify.Event) error {
 }
 
 func (d *Daemon) fullSweep(ctx context.Context) error {
-	for _, agentCfg := range d.cfg.Agents {
+	for i := range d.cfg.Agents {
+		agentCfg := &d.cfg.Agents[i]
 		dir := mailbox.InboxDir(d.stateDir, agentCfg.Name, protocol.FolderStateUnread)
 		entries, err := os.ReadDir(dir)
 		if err != nil {

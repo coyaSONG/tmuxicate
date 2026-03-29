@@ -833,7 +833,8 @@ func printStatusReport(report *session.StatusReport) {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "AGENT\tPANE\tOBSERVED\tDECLARED\tUNREAD\tACTIVE\tLAST-EVENT")
-	for _, agent := range report.AgentStatuses {
+	for i := range report.AgentStatuses {
+		agent := &report.AgentStatuses[i]
 		lastEvent := "-"
 		if agent.LastEvent != nil {
 			lastEvent = formatAge(time.Since(*agent.LastEvent))
