@@ -143,10 +143,10 @@ The full schema and design rationale live in [DESIGN.md](./DESIGN.md).
 | `tmuxicate task wait <message-id>` | Mark an active task as waiting. |
 | `tmuxicate task block <message-id>` | Mark an active task as blocked. |
 | `tmuxicate task done <message-id>` | Mark an active task as done. |
-| `tmuxicate status` | Planned operator dashboard; currently stubbed. |
-| `tmuxicate log` | Planned transcript/event viewer; currently stubbed. |
-| `tmuxicate init` | Planned config/bootstrap helper; currently stubbed. |
-| `tmuxicate pick` | Planned fzf/tmux picker; currently stubbed. |
+| `tmuxicate status` | Operator dashboard showing agent states, inbox counts, and daemon health. |
+| `tmuxicate log` | Transcript and event viewer with `--tail`, `--follow`, `--all`, and `--raw` flags. |
+| `tmuxicate init` | Interactive config generator with minimal and triad templates. |
+| `tmuxicate pick` | Planned fzf/tmux picker; currently stubbed (v0.2). |
 
 ## Architecture
 
@@ -169,12 +169,13 @@ What works now:
 - per-agent `run.sh` and `bootstrap.txt` generation
 - unread mailbox delivery via a minimal daemon
 - agent-facing commands: `inbox`, `read`, `reply`, `next`, and `task *`
+- operator dashboard (`status`) and transcript viewer (`log`)
+- interactive config generator (`init`)
 
 What is planned for v0.2:
 
 - richer adapter support for Codex and Claude-specific readiness signals
-- operator dashboard and transcript viewer
-- picker UI
+- picker UI (`pick`)
 - stronger reconciliation and recovery flows
 - coordinator-friendly automation on top of the mailbox
 

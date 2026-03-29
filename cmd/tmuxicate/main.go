@@ -42,7 +42,9 @@ func newRootCmd() *cobra.Command {
 		newStatusCmd(),
 		newLogCmd(),
 		newInitCmd(),
-		newStubCmd("pick", "Pick an agent or pane"),
+		newPickCmd(),
+		newListPanesCmd(),
+		newPreviewPaneCmd(),
 		newServeCmd(),
 	)
 
@@ -604,6 +606,103 @@ func newLogCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "show logs for all agents")
 	cmd.Flags().BoolVar(&raw, "raw", false, "show raw transcript output")
 	cmd.Flags().BoolVar(&eventsOnly, "events", false, "show structured events only")
+	return cmd
+}
+
+func newPickCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+	var emit string
+	var insert string
+
+	cmd := &cobra.Command{
+		Use:   "pick",
+		Short: "Pick an agent or pane",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			client := tmux.NewRealClient("")
+			return session.Pick(resolvedStateDir, client, session.PickOpts{
+				Emit:   emit,
+				Insert: insert,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	cmd.Flags().StringVar(&emit, "emit", "alias", "what to output: alias, name, pane-id")
+	cmd.Flags().StringVar(&insert, "insert", "raw", "insertion mode: send-target, raw")
+	return cmd
+}
+
+func newListPanesCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+
+	cmd := &cobra.Command{
+		Use:    "__list-panes",
+		Short:  "List panes for fzf picker",
+		Hidden: true,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			client := tmux.NewRealClient("")
+			output, err := session.ListPanes(resolvedStateDir, client, session.ListPanesOpts{})
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(output)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	return cmd
+}
+
+func newPreviewPaneCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+	var paneID string
+	var alias string
+
+	cmd := &cobra.Command{
+		Use:    "__preview-pane",
+		Short:  "Preview a pane for fzf picker",
+		Hidden: true,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			client := tmux.NewRealClient("")
+			output, err := session.PreviewPane(resolvedStateDir, client, session.PreviewPaneOpts{
+				PaneID: paneID,
+				Alias:  alias,
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Print(output)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	cmd.Flags().StringVar(&paneID, "pane", "", "pane ID to preview")
+	cmd.Flags().StringVar(&alias, "alias", "", "agent alias to preview")
 	return cmd
 }
 
