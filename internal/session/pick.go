@@ -176,11 +176,11 @@ func PreviewPane(stateDir string, client tmux.Client, opts PreviewPaneOpts) (str
 
 	// Find the agent by alias or pane ID.
 	var agentName, alias, role string
-	for _, agent := range cfg.Agents {
-		if agent.Alias == opts.Alias || agent.Name == opts.Alias {
-			agentName = agent.Name
-			alias = agent.Alias
-			role = agent.Role
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Alias == opts.Alias || cfg.Agents[i].Name == opts.Alias {
+			agentName = cfg.Agents[i].Name
+			alias = cfg.Agents[i].Alias
+			role = cfg.Agents[i].Role
 			break
 		}
 	}

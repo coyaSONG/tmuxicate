@@ -33,22 +33,22 @@ func Down(stateDir string, tmuxClient tmux.Client, force bool) error {
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	for _, agent := range cfg.Agents {
-		activeDir := mailbox.InboxDir(cfg.Session.StateDir, agent.Name, protocol.FolderStateActive)
+	for i := range cfg.Agents {
+		activeDir := mailbox.InboxDir(cfg.Session.StateDir, cfg.Agents[i].Name, protocol.FolderStateActive)
 		entries, err := os.ReadDir(activeDir)
 		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("read active inbox for %s: %w", agent.Name, err)
+			return fmt.Errorf("read active inbox for %s: %w", cfg.Agents[i].Name, err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
 			}
-			receipt, err := store.ReadReceipt(agent.Name, protocol.MessageID(extractMessageID(entry.Name())))
+			receipt, err := store.ReadReceipt(cfg.Agents[i].Name, protocol.MessageID(extractMessageID(entry.Name())))
 			if err != nil {
 				return err
 			}
 			lastErr := "session_stopped"
-			if err := store.UpdateReceipt(agent.Name, receipt.MessageID, func(r *protocol.Receipt) {
+			if err := store.UpdateReceipt(cfg.Agents[i].Name, receipt.MessageID, func(r *protocol.Receipt) {
 				r.ClaimedBy = nil
 				r.ClaimedAt = nil
 				r.LastError = &lastErr
@@ -56,7 +56,7 @@ func Down(stateDir string, tmuxClient tmux.Client, force bool) error {
 			}); err != nil {
 				return err
 			}
-			if err := store.MoveReceipt(agent.Name, receipt.MessageID, protocol.FolderStateActive, protocol.FolderStateUnread); err != nil {
+			if err := store.MoveReceipt(cfg.Agents[i].Name, receipt.MessageID, protocol.FolderStateActive, protocol.FolderStateUnread); err != nil {
 				return err
 			}
 		}

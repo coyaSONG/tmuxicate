@@ -112,9 +112,9 @@ func Send(stateDir string, store *mailbox.Store, to string, body string, opts Se
 }
 
 func resolveTargetAgent(cfg *config.ResolvedConfig, target string) (string, error) {
-	for _, agent := range cfg.Agents {
-		if agent.Name == target || agent.Alias == target {
-			return agent.Name, nil
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Name == target || cfg.Agents[i].Alias == target {
+			return cfg.Agents[i].Name, nil
 		}
 	}
 	return "", fmt.Errorf("unknown target agent %q", target)
