@@ -27,5 +27,5 @@ linters:
         - name: error-return
         - name: error-naming
   exclusions:
-    max-issues-per-linter: 50
-    max-same-issues: 10
+    presets:
+      - std-error-handling
