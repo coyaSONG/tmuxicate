@@ -180,7 +180,8 @@ func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client) (map[string]
 
 func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
 	rightTopPaneID := ""
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		if agent.Name == mainAgentName {
 			continue
 		}
@@ -230,7 +231,8 @@ func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs
 }
 
 func startDefaultPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		if agent.Name == mainAgentName {
 			continue
 		}
@@ -260,7 +262,8 @@ func applyPaneMetadata(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneI
 		return fmt.Errorf("set session window option: %w", err)
 	}
 
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		paneID := paneIDs[agent.Name]
 		if err := tmuxClient.SetPaneTitle(backgroundCtx(), paneID, fmt.Sprintf("%s(%s)", agent.Name, agent.Alias)); err != nil {
 			return fmt.Errorf("set pane title for %s: %w", agent.Name, err)
@@ -300,7 +303,8 @@ func applyLayout(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 }
 
 func enableTranscripts(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string) error {
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		transcriptPath := filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, agent.Name), "transcripts", "raw.ansi.log")
 		if err := os.WriteFile(transcriptPath, []byte{}, 0o644); err != nil {
 			return fmt.Errorf("create transcript file for %s: %w", agent.Name, err)
