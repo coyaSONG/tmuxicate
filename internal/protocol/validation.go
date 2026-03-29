@@ -137,9 +137,8 @@ func (r Receipt) Validate() error {
 			return errors.New("done_at must be nil for unread receipts")
 		}
 	case FolderStateActive:
-		if r.DoneAt != nil {
-			return errors.New("done_at must be nil for active receipts")
-		}
+		// v0.1 task completion updates done_at before moving the receipt to done.
+		// Allow that short-lived intermediate state.
 	case FolderStateDone:
 		if r.DoneAt == nil {
 			return errors.New("done receipts require done_at")

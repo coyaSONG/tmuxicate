@@ -65,7 +65,7 @@ func Send(stateDir string, store *mailbox.Store, to string, body string, opts Se
 
 	kind := opts.Kind
 	if kind == "" {
-		kind = protocol.KindNote
+		kind = protocol.KindTask
 	}
 	priority := opts.Priority
 	if priority == "" {

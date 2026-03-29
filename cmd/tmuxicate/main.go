@@ -112,6 +112,7 @@ func newSendCmd() *cobra.Command {
 	var configPath string
 	var stateDir string
 	var subject string
+	var kind string
 
 	cmd := &cobra.Command{
 		Use:   "send <agent> <message>",
@@ -130,6 +131,7 @@ func newSendCmd() *cobra.Command {
 			body := strings.Join(args[1:], " ")
 			msgID, err := session.Send(stateDir, store, args[0], body, session.SendOpts{
 				Subject: subject,
+				Kind:    protocol.Kind(kind),
 			})
 			if err != nil {
 				return err
@@ -143,6 +145,7 @@ func newSendCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
 	cmd.Flags().StringVar(&subject, "subject", "", "optional message subject")
+	cmd.Flags().StringVar(&kind, "kind", string(protocol.KindTask), "message kind")
 	return cmd
 }
 
