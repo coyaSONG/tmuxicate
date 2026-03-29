@@ -145,7 +145,8 @@ func Status(stateDir string, tmuxClient tmux.Client) (*StatusReport, error) {
 	}
 	report.FlowStats.Sent = len(messageThreads)
 
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		status := AgentStatus{
 			Name:   agent.Name,
 			Alias:  agent.Alias,

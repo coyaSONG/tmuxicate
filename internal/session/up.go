@@ -80,17 +80,18 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 		filepath.Join(cfg.Session.StateDir, "locks", "receipts"),
 	)
 
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		name := cfg.Agents[i].Name
 		dirs = append(dirs,
-			mailbox.AgentDir(cfg.Session.StateDir, agent.Name),
-			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, agent.Name), "adapter"),
-			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, agent.Name), "events"),
-			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, agent.Name), "transcripts"),
-			mailbox.InboxDir(cfg.Session.StateDir, agent.Name, "unread"),
-			mailbox.InboxDir(cfg.Session.StateDir, agent.Name, "active"),
-			mailbox.InboxDir(cfg.Session.StateDir, agent.Name, "done"),
-			mailbox.InboxDir(cfg.Session.StateDir, agent.Name, "dead"),
-			mailbox.ReceiptLocksDir(cfg.Session.StateDir, agent.Name),
+			mailbox.AgentDir(cfg.Session.StateDir, name),
+			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, name), "adapter"),
+			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, name), "events"),
+			filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, name), "transcripts"),
+			mailbox.InboxDir(cfg.Session.StateDir, name, "unread"),
+			mailbox.InboxDir(cfg.Session.StateDir, name, "active"),
+			mailbox.InboxDir(cfg.Session.StateDir, name, "done"),
+			mailbox.InboxDir(cfg.Session.StateDir, name, "dead"),
+			mailbox.ReceiptLocksDir(cfg.Session.StateDir, name),
 		)
 	}
 
@@ -144,10 +145,10 @@ func generateAgentArtifacts(cfg *config.ResolvedConfig) error {
 func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client) (map[string]string, error) {
 	paneIDs := make(map[string]string, len(cfg.Agents))
 
-	mainAgent := cfg.Agents[0]
-	for _, agent := range cfg.Agents {
-		if agent.Pane.Slot == "main" {
-			mainAgent = agent
+	mainAgent := &cfg.Agents[0]
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Pane.Slot == "main" {
+			mainAgent = &cfg.Agents[i]
 			break
 		}
 	}
