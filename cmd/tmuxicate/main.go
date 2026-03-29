@@ -39,9 +39,9 @@ func newRootCmd() *cobra.Command {
 		newReplyCmd(),
 		newNextCmd(),
 		newTaskCmd(),
-		newStubCmd("status", "Show session status"),
-		newStubCmd("log", "Show transcripts and events"),
-		newStubCmd("init", "Initialize tmuxicate configuration"),
+		newStatusCmd(),
+		newLogCmd(),
+		newInitCmd(),
 		newStubCmd("pick", "Pick an agent or pane"),
 		newServeCmd(),
 	)
@@ -509,6 +509,101 @@ func newServeCmd() *cobra.Command {
 	return cmd
 }
 
+func newInitCmd() *cobra.Command {
+	var dir string
+	var template string
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize tmuxicate configuration",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return session.Init(session.InitOpts{
+				Dir:      dir,
+				Template: template,
+				Force:    force,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&dir, "dir", ".", "directory to initialize")
+	cmd.Flags().StringVar(&template, "template", "triad", "template to generate: minimal or triad")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing tmuxicate.yaml")
+	return cmd
+}
+
+func newStatusCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show session status",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			report, err := session.Status(resolvedStateDir, tmux.NewRealClient(""))
+			if err != nil {
+				return err
+			}
+
+			printStatusReport(report)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	return cmd
+}
+
+func newLogCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+	var tail int
+	var follow bool
+	var all bool
+	var raw bool
+	var eventsOnly bool
+
+	cmd := &cobra.Command{
+		Use:   "log [agent]",
+		Short: "Show transcripts and events",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			agent := ""
+			if len(args) > 0 {
+				agent = args[0]
+			}
+
+			return session.LogView(resolvedStateDir, agent, session.LogOpts{
+				Tail:       tail,
+				Follow:     follow,
+				All:        all,
+				Raw:        raw,
+				EventsOnly: eventsOnly,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	cmd.Flags().IntVar(&tail, "tail", 100, "number of lines to show")
+	cmd.Flags().BoolVar(&follow, "follow", false, "follow log output")
+	cmd.Flags().BoolVar(&all, "all", false, "show logs for all agents")
+	cmd.Flags().BoolVar(&raw, "raw", false, "show raw transcript output")
+	cmd.Flags().BoolVar(&eventsOnly, "events", false, "show structured events only")
+	return cmd
+}
+
 func resolveStateDir(configPath, explicit string) (string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return explicit, nil
@@ -619,6 +714,57 @@ func formatAge(age time.Duration) string {
 		return fmt.Sprintf("%dh", int(age/time.Hour))
 	}
 	return fmt.Sprintf("%dd", int(age/(24*time.Hour)))
+}
+
+func printStatusReport(report *session.StatusReport) {
+	uptime := "-"
+	if report.Uptime > 0 {
+		uptime = formatAge(report.Uptime)
+	}
+	daemonState := "unhealthy"
+	if report.DaemonHealthy {
+		daemonState = "healthy"
+	}
+
+	fmt.Printf("Session: %s   State: %s   Uptime: %s   Daemon: %s\n", report.SessionName, report.State, uptime, daemonState)
+	fmt.Println()
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "AGENT\tPANE\tOBSERVED\tDECLARED\tUNREAD\tACTIVE\tLAST-EVENT")
+	for _, agent := range report.AgentStatuses {
+		lastEvent := "-"
+		if agent.LastEvent != nil {
+			lastEvent = formatAge(time.Since(*agent.LastEvent))
+		}
+		fmt.Fprintf(w, "%s(%s)\t%s\t%s\t%s\t%d\t%d\t%s\n",
+			agent.Name,
+			agent.Alias,
+			agent.PaneID,
+			agent.ObservedState,
+			agent.DeclaredState,
+			agent.UnreadCount,
+			agent.ActiveCount,
+			lastEvent,
+		)
+	}
+	_ = w.Flush()
+
+	fmt.Println()
+	fmt.Printf("FLOW\nsent=%d  acked=%d  done=%d  pending=%d  retrying=%d  failed=%d\n",
+		report.FlowStats.Sent,
+		report.FlowStats.Acked,
+		report.FlowStats.Done,
+		report.FlowStats.Pending,
+		report.FlowStats.Retrying,
+		report.FlowStats.Failed,
+	)
+
+	fmt.Println()
+	fmt.Printf("THREADS\nopen=%d  resolved=%d  closed=%d\n",
+		report.ThreadStats.Open,
+		report.ThreadStats.Resolved,
+		report.ThreadStats.Closed,
+	)
 }
 
 func filepathJoin(elem ...string) string {
