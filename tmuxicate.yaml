@@ -1,0 +1,55 @@
+version: 1
+
+session:
+  name: tmuxicate-test
+  workspace: .
+  state_dir: .tmuxicate/sessions/test
+  window_name: agents
+  layout: main-vertical
+  attach: false
+
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/test/transcripts
+  strip_ansi: true
+
+routing:
+  coordinator: coordinator
+
+defaults:
+  workdir: .
+  env:
+    TMUXICATE_SESSION: tmuxicate-test
+  notify:
+    enabled: true
+
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: generic
+    command: bash test-agents/fake-agent.sh
+    role: "Test coordinator agent"
+    pane:
+      slot: main
+    teammates:
+      - worker
+    bootstrap:
+      extra_instructions: "You are the coordinator."
+
+  - name: worker
+    alias: dev
+    adapter: generic
+    command: bash test-agents/fake-agent.sh
+    role: "Test worker agent"
+    pane:
+      slot: right-top
+    teammates:
+      - coordinator
+    bootstrap:
+      extra_instructions: "You are the worker."

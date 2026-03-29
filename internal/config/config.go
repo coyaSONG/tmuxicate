@@ -33,6 +33,10 @@ func (d Duration) Std() time.Duration {
 	return time.Duration(d)
 }
 
+func (d Duration) MarshalYAML() (any, error) {
+	return time.Duration(d).String(), nil
+}
+
 type Config struct {
 	Version    int              `yaml:"version"`
 	Session    SessionConfig    `yaml:"session"`
