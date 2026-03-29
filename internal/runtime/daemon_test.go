@@ -168,7 +168,10 @@ func TestDaemonNotifiesUnreadReceipt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(fakeTmux.SendKeysCalls) > 0 && got.NotifyAttempts > 0 && got.LastNotifiedAt != nil {
+		fakeTmux.Mu.Lock()
+		notified := len(fakeTmux.SendKeysCalls) > 0
+		fakeTmux.Mu.Unlock()
+		if notified && got.NotifyAttempts > 0 && got.LastNotifiedAt != nil {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

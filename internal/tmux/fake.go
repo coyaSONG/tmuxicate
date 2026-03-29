@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type FakeClient struct {
+	Mu sync.Mutex
+
 	NewSessionCalls       []SessionSpec
 	SplitPaneCalls        []SplitSpec
 	SendKeysCalls         []SendKeysCall
@@ -84,6 +87,9 @@ func NewFakeClient() *FakeClient {
 var _ Client = (*FakeClient)(nil)
 
 func (f *FakeClient) NewSession(_ context.Context, spec SessionSpec) (string, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return "", f.Err
 	}
@@ -104,6 +110,9 @@ func (f *FakeClient) NewSession(_ context.Context, spec SessionSpec) (string, er
 }
 
 func (f *FakeClient) SplitPane(_ context.Context, spec SplitSpec) (string, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return "", f.Err
 	}
@@ -124,6 +133,9 @@ func (f *FakeClient) SplitPane(_ context.Context, spec SplitSpec) (string, error
 }
 
 func (f *FakeClient) SendKeys(_ context.Context, paneID string, text string, enter bool) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -140,6 +152,9 @@ func (f *FakeClient) SendKeys(_ context.Context, paneID string, text string, ent
 }
 
 func (f *FakeClient) CapturePane(_ context.Context, paneID string, lines int) (string, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return "", f.Err
 	}
@@ -149,6 +164,9 @@ func (f *FakeClient) CapturePane(_ context.Context, paneID string, lines int) (s
 }
 
 func (f *FakeClient) SetBuffer(_ context.Context, data string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -159,6 +177,9 @@ func (f *FakeClient) SetBuffer(_ context.Context, data string) error {
 }
 
 func (f *FakeClient) PasteBuffer(_ context.Context, paneID string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -169,6 +190,9 @@ func (f *FakeClient) PasteBuffer(_ context.Context, paneID string) error {
 }
 
 func (f *FakeClient) PipePane(_ context.Context, paneID string, cmd string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -178,6 +202,9 @@ func (f *FakeClient) PipePane(_ context.Context, paneID string, cmd string) erro
 }
 
 func (f *FakeClient) SetPaneOption(_ context.Context, paneID, key, value string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -191,6 +218,9 @@ func (f *FakeClient) SetPaneOption(_ context.Context, paneID, key, value string)
 }
 
 func (f *FakeClient) ShowPaneOption(_ context.Context, paneID, key string) (string, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return "", f.Err
 	}
@@ -202,6 +232,9 @@ func (f *FakeClient) ShowPaneOption(_ context.Context, paneID, key string) (stri
 }
 
 func (f *FakeClient) SetSessionOption(_ context.Context, session, key, value string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -215,6 +248,9 @@ func (f *FakeClient) SetSessionOption(_ context.Context, session, key, value str
 }
 
 func (f *FakeClient) ListPanes(_ context.Context, session string) ([]PaneInfo, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return nil, f.Err
 	}
@@ -226,6 +262,9 @@ func (f *FakeClient) ListPanes(_ context.Context, session string) ([]PaneInfo, e
 }
 
 func (f *FakeClient) HasSession(_ context.Context, session string) (bool, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return false, f.Err
 	}
@@ -233,6 +272,9 @@ func (f *FakeClient) HasSession(_ context.Context, session string) (bool, error)
 }
 
 func (f *FakeClient) KillSession(_ context.Context, session string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -244,6 +286,9 @@ func (f *FakeClient) KillSession(_ context.Context, session string) error {
 }
 
 func (f *FakeClient) SelectLayout(_ context.Context, window, layout string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
@@ -253,6 +298,9 @@ func (f *FakeClient) SelectLayout(_ context.Context, window, layout string) erro
 }
 
 func (f *FakeClient) DisplayPopup(_ context.Context, spec PopupSpec) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.PopupErr != nil {
 		return f.PopupErr
 	}
@@ -265,6 +313,9 @@ func (f *FakeClient) DisplayPopup(_ context.Context, spec PopupSpec) error {
 }
 
 func (f *FakeClient) SetPaneTitle(_ context.Context, paneID, title string) error {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+
 	if f.Err != nil {
 		return f.Err
 	}
