@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Define validated coordinator run/task contracts and durable artifact paths
+- [x] 01-01-PLAN.md — Define validated coordinator run/task contracts and durable artifact paths
 - [ ] 01-02-PLAN.md — Implement `run` and `run add-task` over mailbox-compatible storage
 - [ ] 01-03-PLAN.md — Rebuild and inspect coordinator runs from durable artifacts
 
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Coordinator Foundations | 0/3 | Not started | - |
+| 1. Coordinator Foundations | 1/3 | In Progress|  |
 | 2. Role-Based Routing | 0/2 | Not started | - |
 | 3. Review Handoff Flow | 0/2 | Not started | - |
 | 4. Blocker Escalation | 0/3 | Not started | - |

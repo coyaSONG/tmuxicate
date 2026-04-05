@@ -7,8 +7,8 @@
 
 ### Planning
 
-- [ ] **PLAN-01**: Operator can start a coordinator run from a high-level goal without manually splitting every child task first
-- [ ] **PLAN-02**: Coordinator creates child tasks that each include an owner, parent linkage, task objective, and expected output
+- [x] **PLAN-01**: Operator can start a coordinator run from a high-level goal without manually splitting every child task first
+- [x] **PLAN-02**: Coordinator creates child tasks that each include an owner, parent linkage, task objective, and expected output
 - [ ] **PLAN-03**: Coordinator run state and child task linkage survive process restarts and can be reconstructed from durable project artifacts
 
 ### Routing
@@ -58,8 +58,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAN-01 | Phase 1 | Pending |
-| PLAN-02 | Phase 1 | Pending |
+| PLAN-01 | Phase 1 | Complete |
+| PLAN-02 | Phase 1 | Complete |
 | PLAN-03 | Phase 1 | Pending |
 | ROUTE-01 | Phase 2 | Pending |
 | ROUTE-02 | Phase 2 | Pending |
