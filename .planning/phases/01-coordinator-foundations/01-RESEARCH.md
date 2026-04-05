@@ -328,17 +328,17 @@ Why it matters: Phase 1 reconstruction should follow this scan-and-join style ov
 | A4 | New workflow code should be split into `internal/session/run.go`, `internal/session/run_rebuild.go`, and optional lower-layer helpers rather than appended to existing large files. | `## Architecture Patterns` | Low. The repo can still work if files are arranged differently, but overly large files will worsen current maintainability concerns. |
 | A5 | The recommended `run` command will emit mailbox child-task messages immediately after canonical run/task records are written. | `## Summary`, `## Architecture Patterns`, `## State of the Art` | Medium. A different execution order could work, but writing mailbox records first would weaken canonical coordinator-state guarantees. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What operator-facing identifier should the UX emphasize: run/task IDs, message IDs, or both?**
    What we know: The context explicitly leaves this discretionary as long as references are durable and traceable. [VERIFIED: 01-CONTEXT.md]
    What's unclear: Whether `status` and future views should default to message IDs, task IDs, or a paired display. [VERIFIED: 01-CONTEXT.md]
-   Recommendation: Persist both and display task ID first with message ID as the drill-down reference. [ASSUMED]
+   Resolution: Persist both and display task ID first with message ID as the drill-down reference. Phase 1 operator views should surface task IDs as the primary unit of ownership and progress, with message IDs retained anywhere the operator needs to inspect the underlying mailbox artifact. [ASSUMED]
 
 2. **Should reconstruction source declared task state from receipts only, or from receipts plus `state.current.json`?**
    What we know: Receipt folders already express delivery/progress buckets, and `task_cmd.go` writes per-agent declared state events. [VERIFIED: internal/session/task_cmd.go] [VERIFIED: internal/mailbox/store.go]
    What's unclear: Whether run views need the richer “awaiting_reply” and “blocked” semantics immediately in Phase 1 or can stay with receipt-state summaries only. [VERIFIED: .planning/ROADMAP.md] [ASSUMED]
-   Recommendation: Join both; use receipts for durable folder state and state events for the compact run-tree summary. [VERIFIED: 01-CONTEXT.md] [ASSUMED]
+   Resolution: Join both. Use receipts for durable folder state and `state.current.json` / declared state events for the compact run-tree summary so Phase 1 visibility already satisfies the locked requirement for a compact state summary without transcript parsing. [VERIFIED: 01-CONTEXT.md] [ASSUMED]
 
 ## Environment Availability
 
