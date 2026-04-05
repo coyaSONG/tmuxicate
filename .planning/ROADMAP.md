@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Define validated coordinator run/task contracts and durable artifact paths
-- [ ] 01-02-PLAN.md — Implement `run` and `run add-task` over mailbox-compatible storage
+- [x] 01-02-PLAN.md — Implement `run` and `run add-task` over mailbox-compatible storage
 - [ ] 01-03-PLAN.md — Rebuild and inspect coordinator runs from durable artifacts
 
 ### Phase 2: Role-Based Routing
