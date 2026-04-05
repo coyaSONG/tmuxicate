@@ -33,6 +33,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(
 		newUpCmd(),
 		newDownCmd(),
+		newRunCmd(),
 		newSendCmd(),
 		newInboxCmd(),
 		newReadCmd(),
@@ -148,6 +149,96 @@ func newSendCmd() *cobra.Command {
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
 	cmd.Flags().StringVar(&subject, "subject", "", "optional message subject")
 	cmd.Flags().StringVar(&kind, "kind", string(protocol.KindTask), "message kind")
+	return cmd
+}
+
+func newRunCmd() *cobra.Command {
+	var configPath string
+	var coordinator string
+
+	cmd := &cobra.Command{
+		Use:   "run <goal...>",
+		Short: "Start or manage a coordinator run",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			cfg, err := config.LoadResolved(configPath)
+			if err != nil {
+				return err
+			}
+
+			run, err := session.Run(cfg, mailbox.NewStore(cfg.Session.StateDir), session.RunRequest{
+				Goal:        strings.Join(args, " "),
+				Coordinator: coordinator,
+				CreatedBy:   "human",
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(run.RunID)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&coordinator, "coordinator", "", "coordinator agent name or alias")
+	_ = cmd.MarkFlagRequired("coordinator")
+	cmd.AddCommand(newRunAddTaskCmd())
+	return cmd
+}
+
+func newRunAddTaskCmd() *cobra.Command {
+	var configPath string
+	var runID string
+	var owner string
+	var goal string
+	var expectedOutput string
+	var dependsOn []string
+	var reviewRequired bool
+
+	cmd := &cobra.Command{
+		Use:   "add-task",
+		Short: "Add a child task to a coordinator run",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			cfg, err := config.LoadResolved(configPath)
+			if err != nil {
+				return err
+			}
+
+			dependencyIDs := make([]protocol.TaskID, 0, len(dependsOn))
+			for _, dep := range dependsOn {
+				dependencyIDs = append(dependencyIDs, protocol.TaskID(dep))
+			}
+
+			task, err := session.AddChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), session.ChildTaskRequest{
+				ParentRunID:    protocol.RunID(runID),
+				Owner:          owner,
+				Goal:           goal,
+				ExpectedOutput: expectedOutput,
+				DependsOn:      dependencyIDs,
+				ReviewRequired: reviewRequired,
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(task.TaskID)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&runID, "run", "", "run identifier")
+	cmd.Flags().StringVar(&owner, "owner", "", "task owner agent name or alias")
+	cmd.Flags().StringVar(&goal, "goal", "", "task goal")
+	cmd.Flags().StringVar(&expectedOutput, "expected-output", "", "expected task output")
+	cmd.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "task dependencies")
+	cmd.Flags().BoolVar(&reviewRequired, "review-required", false, "mark the child task as requiring review")
+	_ = cmd.MarkFlagRequired("run")
+	_ = cmd.MarkFlagRequired("owner")
+	_ = cmd.MarkFlagRequired("goal")
+	_ = cmd.MarkFlagRequired("expected-output")
 	return cmd
 }
 
