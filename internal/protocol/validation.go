@@ -240,6 +240,51 @@ func (t *ChildTask) Validate() error {
 	if t.CreatedAt.IsZero() {
 		return errors.New("created_at is required")
 	}
+	if childTaskHasRoutingMetadata(t) {
+		if err := t.TaskClass.Validate(); err != nil {
+			return fmt.Errorf("task_class: %w", err)
+		}
+
+		domains, err := NormalizeRouteDomains(t.Domains)
+		if err != nil {
+			return fmt.Errorf("domains: %w", err)
+		}
+		if len(domains) == 0 {
+			return errors.New("domains must contain at least one domain for routed tasks")
+		}
+
+		normalizedDomains, err := NormalizeRouteDomains(t.NormalizedDomains)
+		if err != nil {
+			return fmt.Errorf("normalized_domains: %w", err)
+		}
+		if len(normalizedDomains) == 0 {
+			return errors.New("normalized_domains must contain at least one domain for routed tasks")
+		}
+		if !slices.Equal(normalizedDomains, domains) {
+			return errors.New("normalized_domains must match normalized domains")
+		}
+
+		expectedDuplicateKey := fmt.Sprintf("%s|%s|%s", t.ParentRunID, t.TaskClass, strings.Join(normalizedDomains, ","))
+		if strings.TrimSpace(t.DuplicateKey) == "" {
+			return errors.New("duplicate_key is required for routed tasks")
+		}
+		if t.DuplicateKey != expectedDuplicateKey {
+			return fmt.Errorf("duplicate_key must equal %q", expectedDuplicateKey)
+		}
+
+		if t.RoutingDecision == nil {
+			return errors.New("routing_decision is required for routed tasks")
+		}
+		if err := t.RoutingDecision.Validate(); err != nil {
+			return fmt.Errorf("routing_decision: %w", err)
+		}
+		if t.RoutingDecision.TieBreak == "owner_override" && strings.TrimSpace(t.OverrideReason) == "" {
+			return errors.New("override_reason is required when owner override is used")
+		}
+
+		t.Domains = domains
+		t.NormalizedDomains = normalizedDomains
+	}
 
 	return nil
 }
@@ -288,21 +333,8 @@ func (d *RoutingDecision) Validate() error {
 	if d == nil {
 		return errors.New("routing decision is required")
 	}
-	if err := d.TaskClass.Validate(); err != nil {
-		return fmt.Errorf("task_class: %w", err)
-	}
-	domains, err := NormalizeRouteDomains(d.Domains)
-	if err != nil {
-		return fmt.Errorf("domains: %w", err)
-	}
-	if len(domains) == 0 {
-		return errors.New("domains must contain at least one domain")
-	}
-	if len(d.AllowedOwners) == 0 {
-		return errors.New("allowed_owners must contain at least one owner")
-	}
-	if len(d.EligibleCandidates) == 0 {
-		return errors.New("eligible_candidates must contain at least one candidate")
+	if strings.TrimSpace(d.Status) == "" {
+		return errors.New("status is required")
 	}
 	if strings.TrimSpace(string(d.SelectedOwner)) == "" {
 		return errors.New("selected_owner is required")
@@ -310,8 +342,21 @@ func (d *RoutingDecision) Validate() error {
 	if strings.TrimSpace(d.TieBreak) == "" {
 		return errors.New("tie_break is required")
 	}
+	if len(d.Candidates) == 0 {
+		return errors.New("candidates must contain at least one candidate")
+	}
+	if strings.TrimSpace(d.DuplicateStatus) == "" {
+		return errors.New("duplicate_status is required")
+	}
+	if d.MatchedTaskID != "" && !isGeneratedTaskID(d.MatchedTaskID) {
+		return errors.New("matched_task_id must use generated task_ identifier")
+	}
+	for i, suggestion := range d.Suggestions {
+		if strings.TrimSpace(suggestion) == "" {
+			return fmt.Errorf("suggestions[%d] must not be blank", i)
+		}
+	}
 
-	d.Domains = domains
 	return nil
 }
 
@@ -417,6 +462,19 @@ func isHexSHA256(s string) bool {
 
 func isGeneratedRunID(id RunID) bool {
 	return isGeneratedIdentifier(string(id), "run_")
+}
+
+func childTaskHasRoutingMetadata(task *ChildTask) bool {
+	if task == nil {
+		return false
+	}
+
+	return task.TaskClass != "" ||
+		len(task.Domains) > 0 ||
+		len(task.NormalizedDomains) > 0 ||
+		strings.TrimSpace(task.DuplicateKey) != "" ||
+		task.RoutingDecision != nil ||
+		strings.TrimSpace(task.OverrideReason) != ""
 }
 
 func isGeneratedTaskID(id TaskID) bool {

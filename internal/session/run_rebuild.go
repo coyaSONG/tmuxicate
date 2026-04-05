@@ -120,6 +120,24 @@ func FormatRunGraph(graph *RunGraph) string {
 	for _, task := range graph.Tasks {
 		fmt.Fprintf(&builder, "\nTask: %s\n", task.Task.TaskID)
 		fmt.Fprintf(&builder, "Owner: %s\n", task.Task.Owner)
+		if task.Task.TaskClass != "" {
+			fmt.Fprintf(&builder, "Task Class: %s\n", task.Task.TaskClass)
+		}
+		if domains := formatTaskDomains(task.Task); domains != "" {
+			fmt.Fprintf(&builder, "Domains: %s\n", domains)
+		}
+		if strings.TrimSpace(task.Task.DuplicateKey) != "" {
+			fmt.Fprintf(&builder, "Duplicate Key: %s\n", task.Task.DuplicateKey)
+		}
+		if task.Task.RoutingDecision != nil {
+			fmt.Fprintf(&builder, "Routing Decision: %s\n", formatRoutingDecision(task.Task.RoutingDecision))
+			if candidates := formatRoutingCandidates(task.Task.RoutingDecision.Candidates); candidates != "" {
+				fmt.Fprintf(&builder, "Candidates: %s\n", candidates)
+			}
+		}
+		if strings.TrimSpace(task.Task.OverrideReason) != "" {
+			fmt.Fprintf(&builder, "Override Reason: %s\n", task.Task.OverrideReason)
+		}
 		fmt.Fprintf(&builder, "Goal: %s\n", task.Task.Goal)
 		fmt.Fprintf(&builder, "Expected Output: %s\n", task.Task.ExpectedOutput)
 		fmt.Fprintf(&builder, "Depends On: %s\n", formatDependsOn(task.Task.DependsOn))
@@ -239,4 +257,40 @@ func normalizeDisplayValue(value string) string {
 	}
 
 	return value
+}
+
+func formatTaskDomains(task protocol.ChildTask) string {
+	values := task.NormalizedDomains
+	if len(values) == 0 {
+		values = task.Domains
+	}
+	if len(values) == 0 {
+		return ""
+	}
+
+	return strings.Join(values, ", ")
+}
+
+func formatRoutingDecision(decision *protocol.RoutingDecision) string {
+	if decision == nil {
+		return ""
+	}
+	if strings.TrimSpace(string(decision.SelectedOwner)) == "" {
+		return normalizeDisplayValue(decision.Status)
+	}
+
+	return strings.TrimSpace(fmt.Sprintf("%s %s", decision.Status, decision.SelectedOwner))
+}
+
+func formatRoutingCandidates(candidates []protocol.AgentName) string {
+	if len(candidates) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		parts = append(parts, string(candidate))
+	}
+
+	return strings.Join(parts, ", ")
 }

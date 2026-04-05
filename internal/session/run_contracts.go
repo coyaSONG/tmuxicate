@@ -19,14 +19,20 @@ type RunRequest struct {
 }
 
 type ChildTaskRequest struct {
-	ParentRunID    protocol.RunID     `yaml:"parent_run_id"`
-	Owner          string             `yaml:"owner"`
-	Goal           string             `yaml:"goal"`
-	ExpectedOutput string             `yaml:"expected_output"`
-	DependsOn      []protocol.TaskID  `yaml:"depends_on,omitempty"`
-	ReviewRequired bool               `yaml:"review_required"`
-	MessageID      protocol.MessageID `yaml:"message_id,omitempty"`
-	ThreadID       protocol.ThreadID  `yaml:"thread_id,omitempty"`
+	ParentRunID       protocol.RunID           `yaml:"parent_run_id"`
+	Owner             string                   `yaml:"owner"`
+	Goal              string                   `yaml:"goal"`
+	ExpectedOutput    string                   `yaml:"expected_output"`
+	DependsOn         []protocol.TaskID        `yaml:"depends_on,omitempty"`
+	ReviewRequired    bool                     `yaml:"review_required"`
+	TaskClass         protocol.TaskClass       `yaml:"task_class,omitempty"`
+	Domains           []string                 `yaml:"domains,omitempty"`
+	NormalizedDomains []string                 `yaml:"normalized_domains,omitempty"`
+	DuplicateKey      string                   `yaml:"duplicate_key,omitempty"`
+	RoutingDecision   protocol.RoutingDecision `yaml:"routing_decision,omitempty"`
+	OverrideReason    string                   `yaml:"override_reason,omitempty"`
+	MessageID         protocol.MessageID       `yaml:"message_id,omitempty"`
+	ThreadID          protocol.ThreadID        `yaml:"thread_id,omitempty"`
 }
 
 type RunRootMessageInput struct {
@@ -55,16 +61,25 @@ func (r RunRequest) Validate(cfg *config.ResolvedConfig) error {
 
 func (r ChildTaskRequest) Validate() error {
 	task := protocol.ChildTask{
-		TaskID:         protocol.NewTaskID(1),
-		ParentRunID:    r.ParentRunID,
-		Owner:          protocol.AgentName(r.Owner),
-		Goal:           r.Goal,
-		ExpectedOutput: r.ExpectedOutput,
-		DependsOn:      slices.Clone(r.DependsOn),
-		ReviewRequired: r.ReviewRequired,
-		MessageID:      r.MessageID,
-		ThreadID:       r.ThreadID,
-		CreatedAt:      time.Date(2026, time.April, 5, 0, 0, 0, 0, time.UTC),
+		TaskID:            protocol.NewTaskID(1),
+		ParentRunID:       r.ParentRunID,
+		Owner:             protocol.AgentName(r.Owner),
+		Goal:              r.Goal,
+		ExpectedOutput:    r.ExpectedOutput,
+		DependsOn:         slices.Clone(r.DependsOn),
+		ReviewRequired:    r.ReviewRequired,
+		TaskClass:         r.TaskClass,
+		Domains:           slices.Clone(r.Domains),
+		NormalizedDomains: slices.Clone(r.NormalizedDomains),
+		DuplicateKey:      r.DuplicateKey,
+		OverrideReason:    r.OverrideReason,
+		MessageID:         r.MessageID,
+		ThreadID:          r.ThreadID,
+		CreatedAt:         time.Date(2026, time.April, 5, 0, 0, 0, 0, time.UTC),
+	}
+	if childTaskRequestHasRoutingMetadata(r) {
+		decision := r.RoutingDecision
+		task.RoutingDecision = &decision
 	}
 
 	return task.Validate()
@@ -100,4 +115,19 @@ func matchesAgentNameOrAlias(cfg *config.ResolvedConfig, target string) bool {
 		}
 	}
 	return false
+}
+
+func childTaskRequestHasRoutingMetadata(req ChildTaskRequest) bool {
+	return req.TaskClass != "" ||
+		len(req.Domains) > 0 ||
+		len(req.NormalizedDomains) > 0 ||
+		strings.TrimSpace(req.DuplicateKey) != "" ||
+		strings.TrimSpace(req.RoutingDecision.Status) != "" ||
+		strings.TrimSpace(string(req.RoutingDecision.SelectedOwner)) != "" ||
+		len(req.RoutingDecision.Candidates) > 0 ||
+		strings.TrimSpace(req.RoutingDecision.TieBreak) != "" ||
+		strings.TrimSpace(req.RoutingDecision.DuplicateStatus) != "" ||
+		req.RoutingDecision.MatchedTaskID != "" ||
+		len(req.RoutingDecision.Suggestions) > 0 ||
+		strings.TrimSpace(req.OverrideReason) != ""
 }

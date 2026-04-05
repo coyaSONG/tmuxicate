@@ -127,6 +127,40 @@ func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTas
 		return nil, fmt.Errorf("owner %q is not an allowed owner for run %q", owner.Name, run.RunID)
 	}
 
+	if childTaskRequestHasRoutingMetadata(req) {
+		unlock, err := mailbox.LockRunRoute(cfg.Session.StateDir, req.ParentRunID)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = unlock() }()
+	}
+
+	return addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, owner, req)
+}
+
+func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.Store, coordinatorStore *mailbox.CoordinatorStore, run *protocol.CoordinatorRun, owner *config.AgentConfig, req ChildTaskRequest) (*protocol.ChildTask, error) {
+	var routingDecision *protocol.RoutingDecision
+	if childTaskRequestHasRoutingMetadata(req) {
+		decision := req.RoutingDecision
+		decision.Status = strings.TrimSpace(decision.Status)
+		decision.SelectedOwner = protocol.AgentName(owner.Name)
+		if duplicate, err := findActiveDuplicateTask(cfg.Session.StateDir, req.ParentRunID, req.DuplicateKey); err != nil {
+			return nil, err
+		} else if duplicate != nil {
+			if duplicatePolicyBlocks(cfg, req.TaskClass) {
+				return nil, duplicateRouteError(req.DuplicateKey, duplicate.TaskID)
+			}
+
+			decision.DuplicateStatus = "fanout"
+			decision.MatchedTaskID = duplicate.TaskID
+		} else {
+			decision.DuplicateStatus = "unique"
+			decision.MatchedTaskID = ""
+		}
+
+		routingDecision = &decision
+	}
+
 	taskSeq, err := store.AllocateSeq()
 	if err != nil {
 		return nil, fmt.Errorf("allocate task sequence: %w", err)
@@ -137,16 +171,22 @@ func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTas
 	}
 
 	task := protocol.ChildTask{
-		TaskID:         protocol.NewTaskID(taskSeq),
-		ParentRunID:    req.ParentRunID,
-		Owner:          protocol.AgentName(owner.Name),
-		Goal:           strings.TrimSpace(req.Goal),
-		ExpectedOutput: strings.TrimSpace(req.ExpectedOutput),
-		DependsOn:      slices.Clone(req.DependsOn),
-		ReviewRequired: req.ReviewRequired,
-		MessageID:      protocol.NewMessageID(messageSeq),
-		ThreadID:       run.RootThreadID,
-		CreatedAt:      time.Now().UTC(),
+		TaskID:            protocol.NewTaskID(taskSeq),
+		ParentRunID:       req.ParentRunID,
+		Owner:             protocol.AgentName(owner.Name),
+		Goal:              strings.TrimSpace(req.Goal),
+		ExpectedOutput:    strings.TrimSpace(req.ExpectedOutput),
+		DependsOn:         slices.Clone(req.DependsOn),
+		ReviewRequired:    req.ReviewRequired,
+		TaskClass:         req.TaskClass,
+		Domains:           slices.Clone(req.Domains),
+		NormalizedDomains: slices.Clone(req.NormalizedDomains),
+		DuplicateKey:      strings.TrimSpace(req.DuplicateKey),
+		RoutingDecision:   routingDecision,
+		OverrideReason:    strings.TrimSpace(req.OverrideReason),
+		MessageID:         protocol.NewMessageID(messageSeq),
+		ThreadID:          run.RootThreadID,
+		CreatedAt:         time.Now().UTC(),
 	}
 
 	body := buildChildTaskBody(run, &task)
@@ -200,11 +240,26 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 		return nil, nil, err
 	}
 
+	unlock, err := mailbox.LockRunRoute(cfg.Session.StateDir, req.RunID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = unlock() }()
+
+	duplicateKey := duplicateKeyForRoute(req.RunID, req.TaskClass, req.Domains)
+	existingDuplicate, err := findActiveDuplicateTask(cfg.Session.StateDir, req.RunID, duplicateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if existingDuplicate != nil && duplicatePolicyBlocks(cfg, req.TaskClass) {
+		return nil, nil, duplicateRouteError(duplicateKey, existingDuplicate.TaskID)
+	}
+
 	kindCandidates, domainCandidates := routeCandidates(cfg, run.AllowedOwners, req.TaskClass, req.Domains)
 	rankCandidates(kindCandidates)
 	rankCandidates(domainCandidates)
 	if req.OwnerOverride != "" {
-		return routeChildTaskOverride(cfg, store, req, run, kindCandidates)
+		return routeChildTaskOverride(cfg, store, coordinatorStore, req, run, kindCandidates, duplicateKey, existingDuplicate)
 	}
 	if len(domainCandidates) == 0 {
 		rejection := &protocol.RouteRejection{
@@ -223,23 +278,33 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 
 	selected := domainCandidates[0]
 	decision := &protocol.RoutingDecision{
-		TaskClass:          req.TaskClass,
-		Domains:            slices.Clone(req.Domains),
-		AllowedOwners:      slices.Clone(run.AllowedOwners),
-		EligibleCandidates: candidateNames(kindCandidates),
-		SelectedOwner:      protocol.AgentName(selected.agent.Name),
-		TieBreak:           "route_priority desc, config_order asc",
+		Status:        "selected",
+		SelectedOwner: protocol.AgentName(selected.agent.Name),
+		Candidates:    candidateNames(domainCandidates),
+		TieBreak:      "route_priority desc, config_order asc",
+	}
+	if existingDuplicate != nil {
+		decision.DuplicateStatus = "fanout"
+		decision.MatchedTaskID = existingDuplicate.TaskID
+	} else {
+		decision.DuplicateStatus = "unique"
 	}
 	if err := decision.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
-		ParentRunID:    req.RunID,
-		Owner:          selected.agent.Name,
-		Goal:           req.Goal,
-		ExpectedOutput: req.ExpectedOutput,
-		ReviewRequired: req.ReviewRequired,
+	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, selected.agent, ChildTaskRequest{
+		ParentRunID:       req.RunID,
+		Owner:             selected.agent.Name,
+		Goal:              req.Goal,
+		ExpectedOutput:    req.ExpectedOutput,
+		ReviewRequired:    req.ReviewRequired,
+		TaskClass:         req.TaskClass,
+		Domains:           slices.Clone(req.Domains),
+		NormalizedDomains: slices.Clone(req.Domains),
+		DuplicateKey:      duplicateKey,
+		RoutingDecision:   *decision,
+		OverrideReason:    req.OverrideReason,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -395,7 +460,7 @@ func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentN
 	return kindCandidates, domainCandidates
 }
 
-func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
+func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, coordinatorStore *mailbox.CoordinatorStore, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate, duplicateKey string, existingDuplicate *protocol.ChildTask) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
 	owner, err := resolveAgentConfig(cfg, string(req.OwnerOverride))
 	if err != nil {
 		return nil, nil, err
@@ -404,24 +469,38 @@ func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, re
 		return nil, nil, fmt.Errorf("owner override %q is not an allowed owner for run %q", owner.Name, run.RunID)
 	}
 
+	candidates := candidateNames(kindCandidates)
+	if len(candidates) == 0 {
+		candidates = []protocol.AgentName{protocol.AgentName(owner.Name)}
+	}
 	decision := &protocol.RoutingDecision{
-		TaskClass:          req.TaskClass,
-		Domains:            slices.Clone(req.Domains),
-		AllowedOwners:      slices.Clone(run.AllowedOwners),
-		EligibleCandidates: candidateNames(kindCandidates),
-		SelectedOwner:      protocol.AgentName(owner.Name),
-		TieBreak:           "owner_override",
+		Status:        "selected",
+		SelectedOwner: protocol.AgentName(owner.Name),
+		Candidates:    candidates,
+		TieBreak:      "owner_override",
+	}
+	if existingDuplicate != nil {
+		decision.DuplicateStatus = "fanout"
+		decision.MatchedTaskID = existingDuplicate.TaskID
+	} else {
+		decision.DuplicateStatus = "unique"
 	}
 	if err := decision.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
-		ParentRunID:    req.RunID,
-		Owner:          owner.Name,
-		Goal:           req.Goal,
-		ExpectedOutput: req.ExpectedOutput,
-		ReviewRequired: req.ReviewRequired,
+	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, owner, ChildTaskRequest{
+		ParentRunID:       req.RunID,
+		Owner:             owner.Name,
+		Goal:              req.Goal,
+		ExpectedOutput:    req.ExpectedOutput,
+		ReviewRequired:    req.ReviewRequired,
+		TaskClass:         req.TaskClass,
+		Domains:           slices.Clone(req.Domains),
+		NormalizedDomains: slices.Clone(req.Domains),
+		DuplicateKey:      duplicateKey,
+		RoutingDecision:   *decision,
+		OverrideReason:    req.OverrideReason,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -481,6 +560,61 @@ func routeSuggestions(taskClass protocol.TaskClass, candidates []routeCandidate)
 		"Choose domains that are covered by one of the eligible_candidates.",
 		"Add the missing domain to an allowed owner's role.domains and retry.",
 	}
+}
+
+func duplicatePolicyBlocks(cfg *config.ResolvedConfig, taskClass protocol.TaskClass) bool {
+	if duplicatePolicyAllowsFanout(cfg, taskClass) {
+		return false
+	}
+	// routing.exclusive_task_classes stays as an explicit duplicate-block allowlist in config.
+	if slices.Contains(cfg.Routing.ExclusiveTaskClasses, taskClass) {
+		return true
+	}
+
+	return true
+}
+
+func duplicatePolicyAllowsFanout(cfg *config.ResolvedConfig, taskClass protocol.TaskClass) bool {
+	// routing.fanout_task_classes is the only config path that permits duplicate fanout.
+	return slices.Contains(cfg.Routing.FanoutTaskClasses, taskClass)
+}
+
+func duplicateKeyForRoute(runID protocol.RunID, taskClass protocol.TaskClass, normalizedDomains []string) string {
+	return fmt.Sprintf("%s|%s|%s", runID, taskClass, strings.Join(normalizedDomains, ","))
+}
+
+func findActiveDuplicateTask(stateDir string, runID protocol.RunID, duplicateKey string) (*protocol.ChildTask, error) {
+	if strings.TrimSpace(duplicateKey) == "" {
+		return nil, nil
+	}
+
+	tasks, err := loadRunTasks(stateDir, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, task := range tasks {
+		if task.DuplicateKey != duplicateKey {
+			continue
+		}
+
+		receiptState, err := loadTaskReceiptState(stateDir, string(task.Owner), task.MessageID)
+		if err != nil {
+			return nil, err
+		}
+		if receiptState == protocol.FolderStateDone || receiptState == protocol.FolderStateDead {
+			continue
+		}
+
+		matched := task
+		return &matched, nil
+	}
+
+	return nil, nil
+}
+
+func duplicateRouteError(duplicateKey string, taskID protocol.TaskID) error {
+	return fmt.Errorf("duplicate_key %q matched_task_id %s", duplicateKey, taskID)
 }
 
 func buildChildTaskBody(run *protocol.CoordinatorRun, task *protocol.ChildTask) string {

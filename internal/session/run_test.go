@@ -168,8 +168,8 @@ func TestRouteChildTaskSelectsDeterministicOwner(t *testing.T) {
 	}
 
 	wantCandidates := []protocol.AgentName{"backend-high", "backend-later", "backend-low"}
-	if !reflect.DeepEqual(decision.EligibleCandidates, wantCandidates) {
-		t.Fatalf("eligible candidates = %#v, want %#v", decision.EligibleCandidates, wantCandidates)
+	if !reflect.DeepEqual(decision.Candidates, wantCandidates) {
+		t.Fatalf("candidates = %#v, want %#v", decision.Candidates, wantCandidates)
 	}
 }
 

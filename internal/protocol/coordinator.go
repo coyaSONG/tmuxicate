@@ -44,6 +44,18 @@ type ChildTask struct {
 	ExpectedOutput string    `yaml:"expected_output"`
 	DependsOn      []TaskID  `yaml:"depends_on,omitempty"`
 	ReviewRequired bool      `yaml:"review_required"`
+	// TaskClass persists as `yaml:"task_class"` when route metadata is present.
+	TaskClass TaskClass `yaml:"task_class,omitempty"`
+	// Domains persists as `yaml:"domains"` when route metadata is present.
+	Domains []string `yaml:"domains,omitempty"`
+	// NormalizedDomains persists as `yaml:"normalized_domains"` when route metadata is present.
+	NormalizedDomains []string `yaml:"normalized_domains,omitempty"`
+	// DuplicateKey persists as `yaml:"duplicate_key"` when route metadata is present.
+	DuplicateKey string `yaml:"duplicate_key,omitempty"`
+	// RoutingDecision persists as `yaml:"routing_decision"` when route metadata is present.
+	RoutingDecision *RoutingDecision `yaml:"routing_decision,omitempty"`
+	// OverrideReason persists as `yaml:"override_reason"` when route metadata is present.
+	OverrideReason string    `yaml:"override_reason,omitempty"`
 	MessageID      MessageID `yaml:"message_id,omitempty"`
 	ThreadID       ThreadID  `yaml:"thread_id,omitempty"`
 	CreatedAt      time.Time `yaml:"created_at"`
@@ -61,12 +73,13 @@ type RouteChildTaskRequest struct {
 }
 
 type RoutingDecision struct {
-	TaskClass          TaskClass   `yaml:"task_class"`
-	Domains            []string    `yaml:"domains"`
-	AllowedOwners      []AgentName `yaml:"allowed_owners"`
-	EligibleCandidates []AgentName `yaml:"eligible_candidates"`
-	SelectedOwner      AgentName   `yaml:"selected_owner"`
-	TieBreak           string      `yaml:"tie_break"`
+	Status          string      `yaml:"status"`
+	SelectedOwner   AgentName   `yaml:"selected_owner,omitempty"`
+	Candidates      []AgentName `yaml:"candidates,omitempty"`
+	TieBreak        string      `yaml:"tie_break,omitempty"`
+	DuplicateStatus string      `yaml:"duplicate_status,omitempty"`
+	MatchedTaskID   TaskID      `yaml:"matched_task_id,omitempty"`
+	Suggestions     []string    `yaml:"suggestions,omitempty"`
 }
 
 type RouteRejection struct {

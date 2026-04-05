@@ -117,3 +117,11 @@ func RunTasksDir(stateDir string, runID protocol.RunID) string {
 func RunTaskPath(stateDir string, runID protocol.RunID, taskID protocol.TaskID) string {
 	return filepath.Join(RunTasksDir(stateDir, runID), fmt.Sprintf("%s.yaml", taskID))
 }
+
+func RunLocksDir(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunDir(stateDir, runID), "locks")
+}
+
+func RunRouteLockPath(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunLocksDir(stateDir, runID), "route.lock")
+}

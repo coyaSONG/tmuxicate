@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
 	"gopkg.in/yaml.v3"
@@ -15,6 +16,15 @@ type CoordinatorStore struct {
 
 func NewCoordinatorStore(stateDir string) *CoordinatorStore {
 	return &CoordinatorStore{stateDir: SessionDir(stateDir)}
+}
+
+func LockRunRoute(stateDir string, runID protocol.RunID) (func() error, error) {
+	path := RunRouteLockPath(stateDir, runID)
+	if err := ensureDir(filepath.Dir(path)); err != nil {
+		return nil, err
+	}
+
+	return flockPath(path)
 }
 
 func (s *CoordinatorStore) CreateRun(run *protocol.CoordinatorRun) error {
