@@ -58,24 +58,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAN-01 | TBD | Pending |
-| PLAN-02 | TBD | Pending |
-| PLAN-03 | TBD | Pending |
-| ROUTE-01 | TBD | Pending |
-| ROUTE-02 | TBD | Pending |
-| REVIEW-01 | TBD | Pending |
-| REVIEW-02 | TBD | Pending |
-| BLOCK-01 | TBD | Pending |
-| BLOCK-02 | TBD | Pending |
-| BLOCK-03 | TBD | Pending |
-| SUM-01 | TBD | Pending |
-| SUM-02 | TBD | Pending |
+| PLAN-01 | Phase 1 | Pending |
+| PLAN-02 | Phase 1 | Pending |
+| PLAN-03 | Phase 1 | Pending |
+| ROUTE-01 | Phase 2 | Pending |
+| ROUTE-02 | Phase 2 | Pending |
+| REVIEW-01 | Phase 3 | Pending |
+| REVIEW-02 | Phase 3 | Pending |
+| BLOCK-01 | Phase 4 | Pending |
+| BLOCK-02 | Phase 4 | Pending |
+| BLOCK-03 | Phase 4 | Pending |
+| SUM-01 | Phase 5 | Pending |
+| SUM-02 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation*
