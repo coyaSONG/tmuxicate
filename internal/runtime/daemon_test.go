@@ -95,7 +95,10 @@ func TestDaemonNotifiesUnreadReceipt(t *testing.T) {
 					Alias:   "review",
 					Adapter: "generic",
 					Command: "fake-agent",
-					Role:    "reviewer",
+					Role: config.RoleSpec{
+						Kind:        "review",
+						Description: "Handles review notifications",
+					},
 					Pane:    config.PaneConfig{Slot: "main"},
 					Workdir: stateDir,
 				},
