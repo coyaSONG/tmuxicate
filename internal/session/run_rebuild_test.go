@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coyaSONG/tmuxicate/internal/config"
 	"github.com/coyaSONG/tmuxicate/internal/mailbox"
@@ -216,11 +217,18 @@ func seedRunGraphFixture(t *testing.T) runGraphFixture {
 func markReceiptState(t *testing.T, store *mailbox.Store, agent string, msgID protocol.MessageID, from, to protocol.FolderState) {
 	t.Helper()
 
-	if err := store.UpdateReceipt(agent, msgID, func(receipt *protocol.Receipt) {
-		receipt.FolderState = to
-		receipt.Revision++
-	}); err != nil {
-		t.Fatalf("update receipt: %v", err)
+	if to == protocol.FolderStateDone {
+		if err := store.MoveReceipt(agent, msgID, from, protocol.FolderStateActive); err != nil {
+			t.Fatalf("move receipt to active before done: %v", err)
+		}
+		doneAt := time.Date(2026, time.April, 5, 6, 5, 0, 0, time.UTC)
+		if err := store.UpdateReceipt(agent, msgID, func(receipt *protocol.Receipt) {
+			receipt.DoneAt = &doneAt
+			receipt.Revision++
+		}); err != nil {
+			t.Fatalf("update receipt before done move: %v", err)
+		}
+		from = protocol.FolderStateActive
 	}
 	if err := store.MoveReceipt(agent, msgID, from, to); err != nil {
 		t.Fatalf("move receipt: %v", err)

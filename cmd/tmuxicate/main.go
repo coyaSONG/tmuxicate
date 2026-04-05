@@ -184,6 +184,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&coordinator, "coordinator", "", "coordinator agent name or alias")
 	_ = cmd.MarkFlagRequired("coordinator")
 	cmd.AddCommand(newRunAddTaskCmd())
+	cmd.AddCommand(newRunShowCmd())
 	return cmd
 }
 
@@ -239,6 +240,37 @@ func newRunAddTaskCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("owner")
 	_ = cmd.MarkFlagRequired("goal")
 	_ = cmd.MarkFlagRequired("expected-output")
+	return cmd
+}
+
+func newRunShowCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "show <run-id>",
+		Short: "Show a coordinator run from durable disk artifacts",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadResolved(configPath)
+			if err != nil {
+				return err
+			}
+
+			graph, err := session.LoadRunGraph(cfg.Session.StateDir, protocol.RunID(args[0]))
+			if err != nil {
+				return err
+			}
+
+			output := session.FormatRunGraph(graph)
+			if !strings.HasPrefix(output, "Run: ") {
+				return fmt.Errorf("run show output must start with Run: header")
+			}
+			_, err = fmt.Fprint(cmd.OutOrStdout(), output)
+			return err
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	return cmd
 }
 
