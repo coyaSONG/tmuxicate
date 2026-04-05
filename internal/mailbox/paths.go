@@ -8,10 +8,14 @@ import (
 )
 
 const (
-	envelopeFileName = "envelope.yaml"
-	bodyFileName     = "body.md"
-	stagingDirName   = ".staging"
-	orphanedDirName  = "orphaned"
+	envelopeFileName   = "envelope.yaml"
+	bodyFileName       = "body.md"
+	stagingDirName     = ".staging"
+	orphanedDirName    = "orphaned"
+	coordinatorDirName = "coordinator"
+	runsDirName        = "runs"
+	runFileName        = "run.yaml"
+	tasksDirName       = "tasks"
 )
 
 func SessionDir(stateDir string) string {
@@ -88,4 +92,28 @@ func ReceiptPath(stateDir, agent string, folder protocol.FolderState, receipt *p
 
 func ReceiptGlob(stateDir, agent string, msgID protocol.MessageID) string {
 	return filepath.Join(InboxBaseDir(stateDir, agent), "*", fmt.Sprintf("*-%s.yaml", msgID))
+}
+
+func CoordinatorDir(stateDir string) string {
+	return filepath.Join(SessionDir(stateDir), coordinatorDirName)
+}
+
+func RunsDir(stateDir string) string {
+	return filepath.Join(CoordinatorDir(stateDir), runsDirName)
+}
+
+func RunDir(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunsDir(stateDir), string(runID))
+}
+
+func RunFilePath(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunDir(stateDir, runID), runFileName)
+}
+
+func RunTasksDir(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunDir(stateDir, runID), tasksDirName)
+}
+
+func RunTaskPath(stateDir string, runID protocol.RunID, taskID protocol.TaskID) string {
+	return filepath.Join(RunTasksDir(stateDir, runID), fmt.Sprintf("%s.yaml", taskID))
 }

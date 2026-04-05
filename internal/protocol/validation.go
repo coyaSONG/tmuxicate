@@ -150,6 +150,99 @@ func (r *Receipt) Validate() error {
 	return nil
 }
 
+func (r *CoordinatorRun) Validate() error {
+	if r == nil {
+		return errors.New("run is required")
+	}
+	if !isGeneratedRunID(r.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if strings.TrimSpace(r.Goal) == "" {
+		return errors.New("goal is required")
+	}
+	if strings.TrimSpace(string(r.Coordinator)) == "" {
+		return errors.New("coordinator is required")
+	}
+	if strings.TrimSpace(string(r.CreatedBy)) == "" {
+		return errors.New("created_by is required")
+	}
+	if r.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+	if strings.TrimSpace(string(r.RootMessageID)) == "" {
+		return errors.New("root_message_id is required")
+	}
+	if strings.TrimSpace(string(r.RootThreadID)) == "" {
+		return errors.New("root_thread_id is required")
+	}
+	if len(r.AllowedOwners) == 0 {
+		return errors.New("allowed_owners must contain at least one owner")
+	}
+	for i, owner := range r.AllowedOwners {
+		if strings.TrimSpace(string(owner)) == "" {
+			return fmt.Errorf("allowed_owners[%d] is required", i)
+		}
+	}
+	if len(r.TeamSnapshot) == 0 {
+		return errors.New("team_snapshot must contain at least one agent")
+	}
+	for i, snapshot := range r.TeamSnapshot {
+		if strings.TrimSpace(string(snapshot.Name)) == "" {
+			return fmt.Errorf("team_snapshot[%d].name is required", i)
+		}
+		if strings.TrimSpace(snapshot.Alias) == "" {
+			return fmt.Errorf("team_snapshot[%d].alias is required", i)
+		}
+		if strings.TrimSpace(snapshot.Role) == "" {
+			return fmt.Errorf("team_snapshot[%d].role is required", i)
+		}
+		for j, teammate := range snapshot.Teammates {
+			if strings.TrimSpace(teammate) == "" {
+				return fmt.Errorf("team_snapshot[%d].teammates[%d] is required", i, j)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *ChildTask) Validate() error {
+	if t == nil {
+		return errors.New("task is required")
+	}
+	if !isGeneratedTaskID(t.TaskID) {
+		return errors.New("task_id must use generated task_ identifier")
+	}
+	if !isGeneratedRunID(t.ParentRunID) {
+		return errors.New("parent_run_id must use generated run_ identifier")
+	}
+	if strings.TrimSpace(string(t.Owner)) == "" {
+		return errors.New("owner is required")
+	}
+	if strings.TrimSpace(t.Goal) == "" {
+		return errors.New("goal is required")
+	}
+	if strings.TrimSpace(t.ExpectedOutput) == "" {
+		return errors.New("expected_output is required")
+	}
+	for i, dep := range t.DependsOn {
+		if !isGeneratedTaskID(dep) {
+			return fmt.Errorf("depends_on[%d] must use generated task_ identifier", i)
+		}
+	}
+	if t.MessageID != "" && strings.TrimSpace(string(t.MessageID)) == "" {
+		return errors.New("message_id must not be blank")
+	}
+	if t.ThreadID != "" && strings.TrimSpace(string(t.ThreadID)) == "" {
+		return errors.New("thread_id must not be blank")
+	}
+	if t.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+
+	return nil
+}
+
 func isValidKind(k Kind) bool {
 	switch k {
 	case KindTask, KindQuestion, KindReviewRequest, KindReviewResponse, KindDecision, KindStatusRequest, KindStatusResponse, KindNote:
@@ -186,6 +279,30 @@ func isHexSHA256(s string) bool {
 		case r >= '0' && r <= '9':
 		case r >= 'a' && r <= 'f':
 		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isGeneratedRunID(id RunID) bool {
+	return isGeneratedIdentifier(string(id), "run_")
+}
+
+func isGeneratedTaskID(id TaskID) bool {
+	return isGeneratedIdentifier(string(id), "task_")
+}
+
+func isGeneratedIdentifier(value string, prefix string) bool {
+	if !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(value, prefix)
+	if len(suffix) != 12 {
+		return false
+	}
+	for _, r := range suffix {
+		if r < '0' || r > '9' {
 			return false
 		}
 	}
