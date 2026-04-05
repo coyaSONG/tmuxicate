@@ -12,7 +12,7 @@ This milestone turns `tmuxicate` from a durable mailbox-and-pane collaboration t
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Coordinator Foundations** - Create durable coordinator runs and child task graph primitives
+- [x] **Phase 1: Coordinator Foundations** - Create durable coordinator runs and child task graph primitives (completed 2026-04-05)
 - [ ] **Phase 2: Role-Based Routing** - Assign work to the right agents without duplicate execution
 - [ ] **Phase 3: Review Handoff Flow** - Move implementation work into linked review tasks and responses
 - [ ] **Phase 4: Blocker Escalation** - Add safe handling for wait, block, reroute, and human escalation
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Define validated coordinator run/task contracts and durable artifact paths
 - [x] 01-02-PLAN.md — Implement `run` and `run add-task` over mailbox-compatible storage
-- [ ] 01-03-PLAN.md — Rebuild and inspect coordinator runs from durable artifacts
+- [x] 01-03-PLAN.md — Rebuild and inspect coordinator runs from durable artifacts
 
 ### Phase 2: Role-Based Routing
 **Goal**: Coordinator routes child tasks deterministically to suitable agents using declared roles and teammate relationships.
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Coordinator Foundations | 1/3 | In Progress|  |
+| 1. Coordinator Foundations | 3/3 | Complete   | 2026-04-05 |
 | 2. Role-Based Routing | 0/2 | Not started | - |
 | 3. Review Handoff Flow | 0/2 | Not started | - |
 | 4. Blocker Escalation | 0/3 | Not started | - |
