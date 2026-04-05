@@ -224,6 +224,252 @@ func TestRouteChildTaskRejectsNoMatchWithStructuredReason(t *testing.T) {
 	}
 }
 
+func TestRouteChildTaskBlocksExclusiveDuplicate(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Route implementation work without duplicate execution",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	firstTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Implement duplicate routing safeguards",
+		ExpectedOutput: "One implementation task for protocol/session work",
+	})
+	if err != nil {
+		t.Fatalf("first route child task: %v", err)
+	}
+
+	const duplicateKeyTemplate = "run_<id>|implementation|protocol,session"
+	wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
+
+	_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"protocol", "session"},
+		OwnerOverride:  protocol.AgentName("backend-low"),
+		OverrideReason: "manual routing review",
+		Goal:           "Re-run the same implementation task with reordered domains",
+		ExpectedOutput: "Duplicate routes are blocked before owner selection",
+	})
+	if err == nil {
+		t.Fatalf("expected duplicate route to fail with duplicate_key %q (template %q)", wantDuplicateKey, duplicateKeyTemplate)
+	}
+	if !strings.Contains(err.Error(), "duplicate_key") {
+		t.Fatalf("expected duplicate error to mention duplicate_key, got %v", err)
+	}
+	if !strings.Contains(err.Error(), wantDuplicateKey) {
+		t.Fatalf("expected duplicate error to contain duplicate_key %q, got %v", wantDuplicateKey, err)
+	}
+	if !strings.Contains(err.Error(), string(firstTask.TaskID)) {
+		t.Fatalf("expected duplicate error to mention matched task id %q, got %v", firstTask.TaskID, err)
+	}
+}
+
+func TestRouteChildTaskAllowsFanoutReviewClass(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Allow explicit review fanout for the same normalized domains",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	firstTask, firstDecision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassReview,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Review the implementation routing outcome",
+		ExpectedOutput: "A review artifact for the same work item",
+		ReviewRequired: true,
+	})
+	if err != nil {
+		t.Fatalf("first route child task: %v", err)
+	}
+	secondTask, secondDecision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassReview,
+		Domains:        []string{"protocol", "session"},
+		Goal:           "Fan out review to a second reviewer pass",
+		ExpectedOutput: "A second review artifact for the same work item",
+		ReviewRequired: true,
+	})
+	if err != nil {
+		t.Fatalf("second route child task: %v", err)
+	}
+
+	if firstDecision == nil || secondDecision == nil {
+		t.Fatalf("expected routing decisions for review fanout")
+	}
+	if firstTask.TaskID == secondTask.TaskID {
+		t.Fatalf("expected fanout review tasks to produce distinct task ids")
+	}
+}
+
+func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing override_reason fails fast", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testRouteTaskConfig(t)
+		store := mailbox.NewStore(cfg.Session.StateDir)
+
+		run, err := Run(cfg, store, RunRequest{
+			Goal:        "Validate owner override guardrails",
+			Coordinator: "pm",
+			CreatedBy:   "human",
+		})
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+			RunID:          run.RunID,
+			TaskClass:      protocol.TaskClassImplementation,
+			Domains:        []string{"session", "protocol"},
+			OwnerOverride:  protocol.AgentName("backend-low"),
+			Goal:           "Try to override routing without an explanation",
+			ExpectedOutput: "override_reason should be required",
+		})
+		if err == nil {
+			t.Fatalf("expected override without override_reason to fail")
+		}
+		if !strings.Contains(err.Error(), "override_reason") {
+			t.Fatalf("expected override validation error to mention override_reason, got %v", err)
+		}
+	})
+
+	t.Run("override cannot bypass duplicate blocking", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testRouteTaskConfig(t)
+		store := mailbox.NewStore(cfg.Session.StateDir)
+
+		run, err := Run(cfg, store, RunRequest{
+			Goal:        "Validate override behavior against duplicate policy",
+			Coordinator: "pm",
+			CreatedBy:   "human",
+		})
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		firstTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+			RunID:          run.RunID,
+			TaskClass:      protocol.TaskClassImplementation,
+			Domains:        []string{"session", "protocol"},
+			Goal:           "Create the first implementation task",
+			ExpectedOutput: "One implementation task exists before the override attempt",
+		})
+		if err != nil {
+			t.Fatalf("first route child task: %v", err)
+		}
+
+		wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
+		_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+			RunID:          run.RunID,
+			TaskClass:      protocol.TaskClassImplementation,
+			Domains:        []string{"protocol", "session"},
+			OwnerOverride:  protocol.AgentName("backend-low"),
+			OverrideReason: "manual reviewer pass",
+			Goal:           "Try to bypass duplicate safeguards with an explicit override",
+			ExpectedOutput: "Duplicate routes stay blocked even with override_reason",
+		})
+		if err == nil {
+			t.Fatalf("expected duplicate route with override_reason to fail")
+		}
+		if !strings.Contains(err.Error(), "duplicate_key") || !strings.Contains(err.Error(), wantDuplicateKey) {
+			t.Fatalf("expected duplicate override failure to mention duplicate_key %q, got %v", wantDuplicateKey, err)
+		}
+		if !strings.Contains(err.Error(), string(firstTask.TaskID)) {
+			t.Fatalf("expected duplicate override failure to mention matched task id %q, got %v", firstTask.TaskID, err)
+		}
+	})
+}
+
+func TestAddChildTaskRejectsDuplicateWithoutRouteDecision(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Verify explicit-owner persistence re-checks duplicate routing metadata",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
+	firstTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:       run.RunID,
+		Owner:             "backend-high",
+		Goal:              "Persist the first routed implementation task",
+		ExpectedOutput:    "One implementation task exists with duplicate routing metadata",
+		TaskClass:         protocol.TaskClassImplementation,
+		Domains:           []string{"session", "protocol"},
+		NormalizedDomains: []string{"protocol", "session"},
+		DuplicateKey:      wantDuplicateKey,
+		RoutingDecision: protocol.RoutingDecision{
+			Status:          "selected",
+			SelectedOwner:   protocol.AgentName("backend-high"),
+			Candidates:      []protocol.AgentName{"backend-high", "backend-low"},
+			TieBreak:        "route_priority desc, config_order asc",
+			DuplicateStatus: "unique",
+		},
+	})
+	if err != nil {
+		t.Fatalf("first add child task: %v", err)
+	}
+
+	_, err = AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:       run.RunID,
+		Owner:             "backend-low",
+		Goal:              "Persist a duplicate implementation task through add-task",
+		ExpectedOutput:    "AddChildTask must reject duplicates without route decision bypass",
+		TaskClass:         protocol.TaskClassImplementation,
+		Domains:           []string{"protocol", "session"},
+		NormalizedDomains: []string{"protocol", "session"},
+		DuplicateKey:      wantDuplicateKey,
+		RoutingDecision: protocol.RoutingDecision{
+			Status:          "selected",
+			SelectedOwner:   protocol.AgentName("backend-low"),
+			Candidates:      []protocol.AgentName{"backend-high", "backend-low"},
+			TieBreak:        "route_priority desc, config_order asc",
+			DuplicateStatus: "duplicate-blocked",
+			MatchedTaskID:   firstTask.TaskID,
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected add child task duplicate to fail with duplicate_key %q", wantDuplicateKey)
+	}
+	if !strings.Contains(err.Error(), "duplicate_key") || !strings.Contains(err.Error(), wantDuplicateKey) {
+		t.Fatalf("expected add child task duplicate error to mention duplicate_key %q, got %v", wantDuplicateKey, err)
+	}
+	if !strings.Contains(err.Error(), string(firstTask.TaskID)) {
+		t.Fatalf("expected add child task duplicate error to mention matched task id %q, got %v", firstTask.TaskID, err)
+	}
+}
+
 func TestChildTaskValidation(t *testing.T) {
 	t.Parallel()
 
@@ -673,7 +919,10 @@ func testRouteTaskConfig(t *testing.T) *config.ResolvedConfig {
 				StateDir:  stateDir,
 			},
 			Routing: config.RoutingConfig{
-				Coordinator: "pm",
+				Coordinator:          "pm",
+				ExclusiveTaskClasses: []protocol.TaskClass{protocol.TaskClassImplementation},
+				// Mirrors tmuxicate.yaml routing.fanout_task_classes for explicit review fanout.
+				FanoutTaskClasses: []protocol.TaskClass{protocol.TaskClassReview},
 			},
 			Agents: []config.AgentConfig{
 				{Name: "pm", Alias: "lead", Role: config.RoleSpec{Kind: string(protocol.TaskClassResearch), Domains: []string{"routing"}, Description: "Coordinates routing and research work"}, Teammates: []string{"backend-high", "backend-low", "backend-later", "reviewer"}},

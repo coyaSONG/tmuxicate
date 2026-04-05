@@ -101,6 +101,69 @@ func TestRunShowSummarizesReceiptAndDeclaredState(t *testing.T) {
 	}
 }
 
+func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Rebuild routed task evidence from disk",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Implement durable routing evidence",
+		ExpectedOutput: "run show renders duplicate and tie-break context from task YAML",
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+
+	writeTaskState(t, cfg.Session.StateDir, "backend-high", task.MessageID, task.ThreadID, protocol.FolderStateUnread, "idle")
+	mutateChildTaskDocument(t, cfg.Session.StateDir, run.RunID, task.TaskID, func(taskDoc map[string]any) {
+		taskDoc["task_class"] = "implementation"
+		taskDoc["domains"] = []string{"session", "protocol"}
+		taskDoc["normalized_domains"] = []string{"protocol", "session"}
+		taskDoc["duplicate_key"] = string(run.RunID) + "|implementation|protocol,session"
+		taskDoc["override_reason"] = "manual reviewer pass"
+		taskDoc["routing_decision"] = map[string]any{
+			"status":           "selected",
+			"selected_owner":   "backend-high",
+			"candidates":       []string{"backend-high", "backend-low"},
+			"tie_break":        "route_priority desc, config_order asc",
+			"duplicate_status": "unique",
+		}
+	})
+
+	graph, err := LoadRunGraph(cfg.Session.StateDir, run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Task Class: implementation",
+		"Domains: protocol, session",
+		"Duplicate Key: " + string(run.RunID) + "|implementation|protocol,session",
+		"Routing Decision: selected backend-high",
+		"Candidates: backend-high, backend-low",
+		"Override Reason: manual reviewer pass",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 	t.Parallel()
 
@@ -274,5 +337,30 @@ func mutateChildTask(t *testing.T, stateDir string, runID protocol.RunID, taskID
 	}
 	if err := os.WriteFile(path, updated, 0o644); err != nil {
 		t.Fatalf("write task yaml: %v", err)
+	}
+}
+
+func mutateChildTaskDocument(t *testing.T, stateDir string, runID protocol.RunID, taskID protocol.TaskID, mutate func(taskDoc map[string]any)) {
+	t.Helper()
+
+	path := mailbox.RunTaskPath(stateDir, runID, taskID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read task yaml: %v", err)
+	}
+
+	taskDoc := make(map[string]any)
+	if err := yaml.Unmarshal(data, &taskDoc); err != nil {
+		t.Fatalf("unmarshal task yaml document: %v", err)
+	}
+
+	mutate(taskDoc)
+
+	updated, err := yaml.Marshal(taskDoc)
+	if err != nil {
+		t.Fatalf("marshal task yaml document: %v", err)
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		t.Fatalf("write task yaml document: %v", err)
 	}
 }
