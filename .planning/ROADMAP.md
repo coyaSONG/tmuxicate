@@ -31,9 +31,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Define coordinator run and child-task data model
-- [ ] 01-02: Persist run/task artifacts through mailbox-compatible storage
-- [ ] 01-03: Add reload and reconstruction coverage for coordinator state
+- [ ] 01-01-PLAN.md — Define validated coordinator run/task contracts and durable artifact paths
+- [ ] 01-02-PLAN.md — Implement `run` and `run add-task` over mailbox-compatible storage
+- [ ] 01-03-PLAN.md — Rebuild and inspect coordinator runs from durable artifacts
 
 ### Phase 2: Role-Based Routing
 **Goal**: Coordinator routes child tasks deterministically to suitable agents using declared roles and teammate relationships.
