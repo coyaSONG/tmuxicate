@@ -19,6 +19,7 @@ This phase delivers the durable foundation for coordinator-driven runs in `tmuxi
 
 ### Child task schema
 - **D-03:** Every child task must record `owner`, `goal`, `expected-output`, `depends-on`, `review-required`, and `parent-run-id`.
+- **D-03a:** The persisted canonical artifact may encode those same fields as snake_case YAML keys (`expected_output`, `depends_on`, `review_required`, `parent_run_id`) as long as the meaning stays identical and all plans, tests, validation, and operator-facing docs stay aligned to that contract.
 - **D-04:** Deadlines are intentionally out of scope for Phase 1; the first milestone should establish durable structure before adding time-based workflow policy.
 
 ### Routing baseline
