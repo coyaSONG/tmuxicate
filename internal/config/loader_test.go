@@ -5,9 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/coyaSONG/tmuxicate/internal/protocol"
 )
 
-func TestLoadValidConfig(t *testing.T) {
+func TestLoadValidConfigWithStructuredRoles(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -33,11 +35,10 @@ transcript:
   dir: .tmuxicate/sessions/dev/transcripts
 routing:
   coordinator: coordinator
-  exclusive_task_kinds:
-    - task
-  fanout_task_kinds:
-    - review_request
-    - question
+  exclusive_task_classes:
+    - implementation
+  fanout_task_classes:
+    - review
 defaults:
   workdir: .
   env:
@@ -50,7 +51,11 @@ agents:
     alias: pm
     adapter: codex
     command: codex
-    role: coordinator
+    role:
+      kind: research
+      domains: [routing]
+      description: Coordinates routing and research work
+    route_priority: 100
     pane:
       slot: main
     teammates:
@@ -59,7 +64,11 @@ agents:
     alias: api
     adapter: claude-code
     command: claude
-    role: backend
+    role:
+      kind: implementation
+      domains: [session, protocol]
+      description: Owns run/session changes
+    route_priority: 20
     pane:
       slot: right-top
     teammates:
@@ -128,14 +137,20 @@ agents:
     alias: pm
     adapter: codex
     command: codex
-    role: coordinator
+    role:
+      kind: research
+      domains: [routing]
+      description: Coordinates routing and research work
     pane:
       slot: main
   - name: coordinator
     alias: api
     adapter: generic
     command: fake-agent
-    role: backend
+    role:
+      kind: implementation
+      domains: [session, protocol]
+      description: Owns run/session changes
     pane:
       slot: right-top
 `)
@@ -170,6 +185,12 @@ func TestResolvePathResolution(t *testing.T) {
 		},
 		Routing: RoutingConfig{
 			Coordinator: "coordinator",
+			ExclusiveTaskClasses: []protocol.TaskClass{
+				protocol.TaskClassImplementation,
+			},
+			FanoutTaskClasses: []protocol.TaskClass{
+				protocol.TaskClassReview,
+			},
 		},
 		Defaults: DefaultsConfig{
 			Workdir: ".",
@@ -179,12 +200,17 @@ func TestResolvePathResolution(t *testing.T) {
 		},
 		Agents: []AgentConfig{
 			{
-				Name:    "coordinator",
-				Alias:   "pm",
-				Adapter: "codex",
-				Command: "codex",
-				Role:    "coordinator",
-				Pane:    PaneConfig{Slot: "main"},
+				Name:          "coordinator",
+				Alias:         "pm",
+				Adapter:       "codex",
+				Command:       "codex",
+				RoutePriority: 100,
+				Role: RoleSpec{
+					Kind:        string(protocol.TaskClassResearch),
+					Domains:     []string{"routing"},
+					Description: "Coordinates routing and research work",
+				},
+				Pane: PaneConfig{Slot: "main"},
 			},
 		},
 	}

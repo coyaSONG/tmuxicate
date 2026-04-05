@@ -1,9 +1,11 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -81,7 +83,7 @@ func TestRunRequestValidation(t *testing.T) {
 	}
 }
 
-func TestRunRootMessageContract(t *testing.T) {
+func TestRunRootMessageContractUsesRouteTaskCommand(t *testing.T) {
 	t.Parallel()
 
 	run := protocol.CoordinatorRun{
@@ -94,9 +96,9 @@ func TestRunRootMessageContract(t *testing.T) {
 		RootThreadID:  protocol.ThreadID("thr_000000000201"),
 		AllowedOwners: []protocol.AgentName{"builder", "qa"},
 		TeamSnapshot: []protocol.AgentSnapshot{
-			{Name: "pm", Alias: "lead", Role: "planner", Teammates: []string{"builder", "qa"}},
-			{Name: "builder", Alias: "dev", Role: "implementer", Teammates: []string{"pm", "qa"}},
-			{Name: "qa", Alias: "tester", Role: "reviewer", Teammates: []string{"pm", "builder"}},
+			{Name: "pm", Alias: "lead", Role: "research", Teammates: []string{"builder", "qa"}},
+			{Name: "builder", Alias: "dev", Role: "implementation", Teammates: []string{"pm", "qa"}},
+			{Name: "qa", Alias: "tester", Role: "review", Teammates: []string{"pm", "builder"}},
 		},
 	}
 
@@ -110,7 +112,10 @@ func TestRunRootMessageContract(t *testing.T) {
 	requiredSnippets := []string{
 		"## Decomposition Instructions",
 		"## Run References",
-		"tmuxicate run add-task --run run_000000000101",
+		"tmuxicate run route-task --run run_000000000101",
+		"--task-class <class>",
+		"--domain <domain>",
+		"--goal \"<goal>\" --expected-output \"<deliverable>\"",
 		"run_id: run_000000000101",
 		"root_message_id: msg_000000000201",
 		"root_thread_id: thr_000000000201",
@@ -119,6 +124,103 @@ func TestRunRootMessageContract(t *testing.T) {
 		if !strings.Contains(body, snippet) {
 			t.Fatalf("expected root message to contain %q\nbody:\n%s", snippet, body)
 		}
+	}
+}
+
+func TestRouteChildTaskSelectsDeterministicOwner(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Route an implementation task to the most specific backend owner",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Implement structured role-aware routing",
+		ExpectedOutput: "A deterministic route-task workflow with inspectable evidence",
+		ReviewRequired: true,
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+
+	if task.Owner != "backend-high" {
+		t.Fatalf("task owner = %q, want %q", task.Owner, "backend-high")
+	}
+	if decision == nil {
+		t.Fatalf("expected routing decision to be returned")
+	}
+	if decision.SelectedOwner != "backend-high" {
+		t.Fatalf("selected owner = %q, want %q", decision.SelectedOwner, "backend-high")
+	}
+	if decision.TieBreak != "route_priority desc, config_order asc" {
+		t.Fatalf("tie break = %q, want %q", decision.TieBreak, "route_priority desc, config_order asc")
+	}
+
+	wantCandidates := []protocol.AgentName{"backend-high", "backend-later", "backend-low"}
+	if !reflect.DeepEqual(decision.EligibleCandidates, wantCandidates) {
+		t.Fatalf("eligible candidates = %#v, want %#v", decision.EligibleCandidates, wantCandidates)
+	}
+}
+
+func TestRouteChildTaskRejectsNoMatchWithStructuredReason(t *testing.T) {
+	t.Parallel()
+
+	cfg := testRouteTaskConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Route an implementation task to the most specific backend owner",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"frontend"},
+		Goal:           "Implement frontend routing even though no owner can cover it",
+		ExpectedOutput: "A fail-loud structured rejection",
+	})
+	if err == nil {
+		t.Fatalf("expected no-match route request to fail")
+	}
+
+	var rejection *protocol.RouteRejection
+	if !errors.As(err, &rejection) {
+		t.Fatalf("expected structured route rejection, got %T: %v", err, err)
+	}
+
+	if rejection.TaskClass != protocol.TaskClassImplementation {
+		t.Fatalf("task_class = %q, want %q", rejection.TaskClass, protocol.TaskClassImplementation)
+	}
+	if !reflect.DeepEqual(rejection.Domains, []string{"frontend"}) {
+		t.Fatalf("domains = %#v, want %#v", rejection.Domains, []string{"frontend"})
+	}
+	if len(rejection.EligibleCandidates) == 0 {
+		t.Fatalf("eligible_candidates should not be empty: %#v", rejection)
+	}
+	if len(rejection.AllowedOwners) == 0 {
+		t.Fatalf("allowed_owners should not be empty: %#v", rejection)
+	}
+	if len(rejection.Suggestions) == 0 {
+		t.Fatalf("suggestions should not be empty: %#v", rejection)
+	}
+	if !slices.Contains(rejection.AllowedOwners, protocol.AgentName("backend-high")) {
+		t.Fatalf("allowed_owners = %#v, want backend-high present", rejection.AllowedOwners)
 	}
 }
 
@@ -273,19 +375,19 @@ func TestRunCreatesCoordinatorArtifactsAndRootMessage(t *testing.T) {
 		{
 			Name:      "pm",
 			Alias:     "lead",
-			Role:      "planner",
+			Role:      "research",
 			Teammates: []string{"backend", "reviewer", "norole"},
 		},
 		{
 			Name:      "backend",
 			Alias:     "dev",
-			Role:      "implementer",
+			Role:      "implementation",
 			Teammates: []string{"pm", "reviewer"},
 		},
 		{
 			Name:      "reviewer",
 			Alias:     "qa",
-			Role:      "reviewer",
+			Role:      "review",
 			Teammates: []string{"pm", "backend"},
 		},
 	}
@@ -335,7 +437,9 @@ func TestRunCreatesCoordinatorArtifactsAndRootMessage(t *testing.T) {
 	requiredSnippets := []string{
 		"## Decomposition Instructions",
 		"## Run References",
-		"tmuxicate run add-task --run " + string(run.RunID),
+		"tmuxicate run route-task --run " + string(run.RunID),
+		"--task-class <class>",
+		"--domain <domain>",
 		"run_id: " + string(run.RunID),
 		"root_message_id: " + string(run.RootMessageID),
 		"root_thread_id: " + string(run.RootThreadID),
@@ -525,9 +629,9 @@ func testResolvedConfig() *config.ResolvedConfig {
 				StateDir:  "/tmp/state",
 			},
 			Agents: []config.AgentConfig{
-				{Name: "pm", Alias: "lead", Role: "planner", Teammates: []string{"builder", "qa"}},
-				{Name: "builder", Alias: "dev", Role: "implementer", Teammates: []string{"pm", "qa"}},
-				{Name: "qa", Alias: "tester", Role: "reviewer", Teammates: []string{"pm", "builder"}},
+				{Name: "pm", Alias: "lead", Role: config.RoleSpec{Kind: string(protocol.TaskClassResearch), Domains: []string{"routing"}, Description: "Coordinates routing and research work"}, Teammates: []string{"builder", "qa"}},
+				{Name: "builder", Alias: "dev", RoutePriority: 20, Role: config.RoleSpec{Kind: string(protocol.TaskClassImplementation), Domains: []string{"session", "protocol"}, Description: "Owns session and protocol implementation"}, Teammates: []string{"pm", "qa"}},
+				{Name: "qa", Alias: "tester", RoutePriority: 10, Role: config.RoleSpec{Kind: string(protocol.TaskClassReview), Domains: []string{"session"}, Description: "Owns review work"}, Teammates: []string{"pm", "builder"}},
 			},
 		},
 	}
@@ -546,11 +650,37 @@ func testRunWorkflowConfig(t *testing.T) *config.ResolvedConfig {
 				StateDir:  stateDir,
 			},
 			Agents: []config.AgentConfig{
-				{Name: "pm", Alias: "lead", Role: "planner", Teammates: []string{"backend", "reviewer", "norole"}},
-				{Name: "backend", Alias: "dev", Role: "implementer", Teammates: []string{"pm", "reviewer"}},
-				{Name: "reviewer", Alias: "qa", Role: "reviewer", Teammates: []string{"pm", "backend"}},
-				{Name: "norole", Alias: "ghost", Role: "", Teammates: []string{"pm"}},
-				{Name: "outsider", Alias: "ops", Role: "operator", Teammates: []string{"reviewer"}},
+				{Name: "pm", Alias: "lead", Role: config.RoleSpec{Kind: string(protocol.TaskClassResearch), Domains: []string{"routing"}, Description: "Coordinates routing and research work"}, Teammates: []string{"backend", "reviewer", "norole"}},
+				{Name: "backend", Alias: "dev", RoutePriority: 20, Role: config.RoleSpec{Kind: string(protocol.TaskClassImplementation), Domains: []string{"session", "protocol"}, Description: "Owns session and protocol implementation"}, Teammates: []string{"pm", "reviewer"}},
+				{Name: "reviewer", Alias: "qa", RoutePriority: 10, Role: config.RoleSpec{Kind: string(protocol.TaskClassReview), Domains: []string{"session"}, Description: "Owns review work"}, Teammates: []string{"pm", "backend"}},
+				{Name: "norole", Alias: "ghost", Role: config.RoleSpec{}, Teammates: []string{"pm"}},
+				{Name: "outsider", Alias: "ops", Role: config.RoleSpec{Kind: string(protocol.TaskClassResearch), Domains: []string{"operations"}, Description: "Owns operations research"}, Teammates: []string{"reviewer"}},
+			},
+		},
+	}
+}
+
+func testRouteTaskConfig(t *testing.T) *config.ResolvedConfig {
+	t.Helper()
+
+	stateDir := t.TempDir()
+
+	return &config.ResolvedConfig{
+		Config: config.Config{
+			Session: config.SessionConfig{
+				Name:      "role-routing",
+				Workspace: filepath.Join(stateDir, "workspace"),
+				StateDir:  stateDir,
+			},
+			Routing: config.RoutingConfig{
+				Coordinator: "pm",
+			},
+			Agents: []config.AgentConfig{
+				{Name: "pm", Alias: "lead", Role: config.RoleSpec{Kind: string(protocol.TaskClassResearch), Domains: []string{"routing"}, Description: "Coordinates routing and research work"}, Teammates: []string{"backend-high", "backend-low", "backend-later", "reviewer"}},
+				{Name: "backend-high", Alias: "api-high", RoutePriority: 20, Role: config.RoleSpec{Kind: string(protocol.TaskClassImplementation), Domains: []string{"session", "protocol"}, Description: "Owns session and protocol implementation"}, Teammates: []string{"pm", "reviewer"}},
+				{Name: "backend-low", Alias: "api-low", RoutePriority: 10, Role: config.RoleSpec{Kind: string(protocol.TaskClassImplementation), Domains: []string{"session", "protocol"}, Description: "Owns secondary implementation work"}, Teammates: []string{"pm", "reviewer"}},
+				{Name: "backend-later", Alias: "api-later", RoutePriority: 20, Role: config.RoleSpec{Kind: string(protocol.TaskClassImplementation), Domains: []string{"session", "protocol"}, Description: "Owns later-declared implementation work"}, Teammates: []string{"pm", "reviewer"}},
+				{Name: "reviewer", Alias: "qa", RoutePriority: 5, Role: config.RoleSpec{Kind: string(protocol.TaskClassReview), Domains: []string{"session", "protocol"}, Description: "Owns review work"}, Teammates: []string{"pm", "backend-high", "backend-low", "backend-later"}},
 			},
 		},
 	}
