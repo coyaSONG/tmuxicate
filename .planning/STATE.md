@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-04-05T08:14:30.644Z"
-last_activity: 2026-04-05 -- Phase 1 completed
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-04-05T08:51:56.663Z"
+last_activity: 2026-04-05
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_plans: 5
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 2 - Role-Based Routing
+**Current focus:** Phase 02 — role-based-routing
 
 ## Current Position
 
-Phase: 2 of 5 (Role-Based Routing)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-04-05 -- Phase 1 completed
+Phase: 02 (role-based-routing) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-05
 
-Progress: [██░░░░░░░░] 20%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01 P01 | 4min | 2 tasks | 5 files |
 | Phase 01 P02 | 10min | 2 tasks | 4 files |
 | Phase 01 P03 | 8min | 2 tasks | 3 files |
+| Phase 02 P01 | 9min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Child task messages reuse the run root thread and reply-to linkage for transcript-free reconstruction.
 - [Phase 01]: Run rebuild validates child task message threads against the run root thread so artifact drift fails loudly.
 - [Phase 01]: Operator inspection renders task IDs, owners, expected output, state, and message IDs as the durable run debugging surface.
+- [Phase 02]: Agent role metadata now uses RoleSpec with canonical task-class kinds and normalized domains.
+- [Phase 02]: RouteChildTask ranks kind-matching candidates by route_priority descending, then config declaration order ascending.
+- [Phase 02]: Coordinator decomposition now routes through tmuxicate run route-task before using run add-task as the explicit-owner persistence path.
 
 ### Pending Todos
 
@@ -80,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T08:14:30.641Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-role-based-routing/02-CONTEXT.md
+Last session: 2026-04-05T08:51:56.661Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

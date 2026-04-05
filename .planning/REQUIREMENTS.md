@@ -13,7 +13,7 @@
 
 ### Routing
 
-- [ ] **ROUTE-01**: Coordinator assigns implementation, research, and review tasks using configured agent roles and teammate relationships
+- [x] **ROUTE-01**: Coordinator assigns implementation, research, and review tasks using configured agent roles and teammate relationships
 - [ ] **ROUTE-02**: Coordinator does not assign the same execution task to multiple agents unless the duplication is an explicit workflow step such as review
 
 ### Review
@@ -61,7 +61,7 @@
 | PLAN-01 | Phase 1 | Complete |
 | PLAN-02 | Phase 1 | Complete |
 | PLAN-03 | Phase 1 | Complete |
-| ROUTE-01 | Phase 2 | Pending |
+| ROUTE-01 | Phase 2 | Complete |
 | ROUTE-02 | Phase 2 | Pending |
 | REVIEW-01 | Phase 3 | Pending |
 | REVIEW-02 | Phase 3 | Pending |

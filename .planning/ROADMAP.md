@@ -46,7 +46,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Implement coordinator routing policy over agent config metadata
+- [x] 02-01: Implement coordinator routing policy over agent config metadata
 - [ ] 02-02: Add routing safeguards and duplicate-assignment tests
 
 ### Phase 3: Review Handoff Flow
