@@ -60,8 +60,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Implement review-request generation from completed work
-- [ ] 03-02: Link reviewer responses back into coordinator run state and views
+- [ ] 03-01-PLAN.md — Automatic review handoff creation from implementation task completion
+- [ ] 03-02-PLAN.md — Review responses and `run show` review-chain visibility
 
 ### Phase 4: Blocker Escalation
 **Goal**: Coordinator handles wait/block states safely through explicit reroute, escalation, and retry limits.
