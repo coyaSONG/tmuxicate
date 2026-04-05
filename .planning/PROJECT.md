@@ -18,10 +18,10 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 - ✓ Runtime daemon can watch unread inboxes and inject short pane notifications when an agent looks ready — existing
 - ✓ Operator can inspect the collaboration state through `status`, `log`, inbox commands, and transcript/event files — existing
 - ✓ The system works across multiple agent CLIs through a generic adapter boundary plus Codex and Claude adapters — existing
+- ✓ Coordinator can turn a high-level human goal into a bounded set of child tasks with clear ownership and expected outputs — validated in Phase 1: Coordinator Foundations
 
 ### Active
 
-- [ ] Coordinator can turn a high-level human goal into a bounded set of child tasks with clear ownership and expected outputs
 - [ ] Coordinator can route implementation, research, and review tasks to the right agents using declared roles and team relationships
 - [ ] Coordinator can manage a review handoff so completed implementation work reaches a reviewer and the resulting feedback returns to the active thread
 - [ ] Coordinator can react to `wait` and `block` states by requesting clarification, re-routing work, or escalating to the human operator
@@ -73,4 +73,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after initialization*
+*Last updated: 2026-04-05 after Phase 1 completion*
