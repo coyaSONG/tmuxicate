@@ -184,6 +184,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&coordinator, "coordinator", "", "coordinator agent name or alias")
 	_ = cmd.MarkFlagRequired("coordinator")
 	cmd.AddCommand(newRunAddTaskCmd())
+	cmd.AddCommand(newRunRouteTaskCmd())
 	cmd.AddCommand(newRunShowCmd())
 	return cmd
 }
@@ -238,6 +239,63 @@ func newRunAddTaskCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&reviewRequired, "review-required", false, "mark the child task as requiring review")
 	_ = cmd.MarkFlagRequired("run")
 	_ = cmd.MarkFlagRequired("owner")
+	_ = cmd.MarkFlagRequired("goal")
+	_ = cmd.MarkFlagRequired("expected-output")
+	return cmd
+}
+
+func newRunRouteTaskCmd() *cobra.Command {
+	var configPath string
+	var runID string
+	var taskClass string
+	var domains []string
+	var goal string
+	var expectedOutput string
+	var reviewRequired bool
+	var ownerOverride string
+	var overrideReason string
+
+	cmd := &cobra.Command{
+		Use:   "route-task",
+		Short: "Route a child task to one deterministic owner",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			cfg, err := config.LoadResolved(configPath)
+			if err != nil {
+				return err
+			}
+
+			task, _, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), protocol.RouteChildTaskRequest{
+				RunID:          protocol.RunID(runID),
+				TaskClass:      protocol.TaskClass(taskClass),
+				Domains:        domains,
+				Goal:           goal,
+				ExpectedOutput: expectedOutput,
+				ReviewRequired: reviewRequired,
+				OwnerOverride:  protocol.AgentName(ownerOverride),
+				OverrideReason: overrideReason,
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(task.TaskID)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&runID, "run", "", "run identifier")
+	cmd.Flags().StringVar(&taskClass, "task-class", "", "routing task class")
+	cmd.Flags().StringSliceVar(&domains, "domain", nil, "required task domain (repeat for multiple domains)")
+	cmd.Flags().StringVar(&goal, "goal", "", "task goal")
+	cmd.Flags().StringVar(&expectedOutput, "expected-output", "", "expected task output")
+	cmd.Flags().BoolVar(&reviewRequired, "review-required", false, "mark the child task as requiring review")
+	cmd.Flags().StringVar(&ownerOverride, "owner-override", "", "explicit owner override after routing review")
+	cmd.Flags().StringVar(&overrideReason, "override-reason", "", "reason for overriding routed owner selection")
+	_ = cmd.MarkFlagRequired("run")
+	_ = cmd.MarkFlagRequired("task-class")
+	_ = cmd.MarkFlagRequired("domain")
 	_ = cmd.MarkFlagRequired("goal")
 	_ = cmd.MarkFlagRequired("expected-output")
 	return cmd

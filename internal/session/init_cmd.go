@@ -153,8 +153,8 @@ func buildInitConfig(absDir, template string, clis []detectedCLI) config.Config 
 	if template == "minimal" {
 		cli := chooseCLI(clis, 0)
 		cfg.Agents = []config.AgentConfig{
-			agentTemplate("coordinator", "pm", cli, "Project coordinator", "main", []string{"worker"}, "Break work down, route tasks, and escalate ambiguity."),
-			agentTemplate("worker", "dev", cli, "General implementation agent", "right-top", []string{"coordinator"}, "Focus on implementation and reply with concrete progress."),
+			agentTemplate("coordinator", "pm", cli, config.RoleSpec{Kind: "research", Domains: []string{"routing"}, Description: "Project coordinator"}, 100, "main", []string{"worker"}, "Break work down, route tasks, and escalate ambiguity."),
+			agentTemplate("worker", "dev", cli, config.RoleSpec{Kind: "implementation", Domains: []string{"session", "protocol"}, Description: "General implementation agent"}, 20, "right-top", []string{"coordinator"}, "Focus on implementation and reply with concrete progress."),
 		}
 		return cfg
 	}
@@ -163,9 +163,9 @@ func buildInitConfig(absDir, template string, clis []detectedCLI) config.Config 
 	backendCLI := chooseCLI(clis, 1)
 	reviewerCLI := chooseCLI(clis, 2)
 	cfg.Agents = []config.AgentConfig{
-		agentTemplate("coordinator", "pm", coordCLI, "Project coordinator", "main", []string{"backend", "reviewer"}, "Break work down, route tasks, and resolve conflicts."),
-		agentTemplate("backend", "api", backendCLI, "Backend implementer", "right-top", []string{"coordinator", "reviewer"}, "Focus on code changes and targeted verification."),
-		agentTemplate("reviewer", "review", reviewerCLI, "Reviewer", "right-bottom", []string{"coordinator", "backend"}, "Review plans and changes for bugs, regressions, and missing tests."),
+		agentTemplate("coordinator", "pm", coordCLI, config.RoleSpec{Kind: "research", Domains: []string{"routing"}, Description: "Project coordinator"}, 100, "main", []string{"backend", "reviewer"}, "Break work down, route tasks, and resolve conflicts."),
+		agentTemplate("backend", "api", backendCLI, config.RoleSpec{Kind: "implementation", Domains: []string{"session", "protocol"}, Description: "Backend implementer"}, 20, "right-top", []string{"coordinator", "reviewer"}, "Focus on code changes and targeted verification."),
+		agentTemplate("reviewer", "review", reviewerCLI, config.RoleSpec{Kind: "review", Domains: []string{"session", "protocol"}, Description: "Reviewer"}, 10, "right-bottom", []string{"coordinator", "backend"}, "Review plans and changes for bugs, regressions, and missing tests."),
 	}
 	return cfg
 }
@@ -177,13 +177,14 @@ func chooseCLI(clis []detectedCLI, index int) detectedCLI {
 	return clis[index%len(clis)]
 }
 
-func agentTemplate(name, alias string, cli detectedCLI, role, slot string, teammates []string, extra string) config.AgentConfig {
+func agentTemplate(name, alias string, cli detectedCLI, role config.RoleSpec, routePriority int, slot string, teammates []string, extra string) config.AgentConfig {
 	return config.AgentConfig{
-		Name:    name,
-		Alias:   alias,
-		Adapter: cli.Adapter,
-		Command: cli.Command,
-		Role:    role,
+		Name:          name,
+		Alias:         alias,
+		Adapter:       cli.Adapter,
+		Command:       cli.Command,
+		Role:          role,
+		RoutePriority: routePriority,
 		Pane: config.PaneConfig{
 			Slot: slot,
 		},

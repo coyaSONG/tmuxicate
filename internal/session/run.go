@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -57,7 +58,7 @@ func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*pro
 	}
 
 	// Build the canonical root contract with `## Decomposition Instructions`,
-	// `## Run References`, and the `tmuxicate run add-task --run` command prefix.
+	// `## Run References`, and the `tmuxicate run route-task --run` command prefix.
 	body, err := BuildRunRootMessageBody(RunRootMessageInput{Run: run})
 	if err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTas
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(owner.Role) == "" {
+	if !owner.Role.IsDeclared() {
 		return nil, fmt.Errorf("owner %q must have declared role metadata", req.Owner)
 	}
 
@@ -175,6 +176,76 @@ func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTas
 	}
 
 	return &task, nil
+}
+
+type routeCandidate struct {
+	agent *config.AgentConfig
+	index int
+}
+
+func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protocol.RouteChildTaskRequest) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("resolved config is required")
+	}
+	if store == nil {
+		return nil, nil, fmt.Errorf("store is required")
+	}
+	if err := req.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	coordinatorStore := mailbox.NewCoordinatorStore(cfg.Session.StateDir)
+	run, err := coordinatorStore.ReadRun(req.RunID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kindCandidates, domainCandidates := routeCandidates(cfg, run.AllowedOwners, req.TaskClass, req.Domains)
+	rankCandidates(kindCandidates)
+	rankCandidates(domainCandidates)
+	if req.OwnerOverride != "" {
+		return routeChildTaskOverride(cfg, store, req, run, kindCandidates)
+	}
+	if len(domainCandidates) == 0 {
+		rejection := &protocol.RouteRejection{
+			TaskClass:          req.TaskClass,
+			Domains:            slices.Clone(req.Domains),
+			AllowedOwners:      slices.Clone(run.AllowedOwners),
+			EligibleCandidates: candidateNames(kindCandidates),
+			Suggestions:        routeSuggestions(req.TaskClass, kindCandidates),
+		}
+		if err := rejection.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("validate route rejection: %w", err)
+		}
+
+		return nil, nil, rejection
+	}
+
+	selected := domainCandidates[0]
+	decision := &protocol.RoutingDecision{
+		TaskClass:          req.TaskClass,
+		Domains:            slices.Clone(req.Domains),
+		AllowedOwners:      slices.Clone(run.AllowedOwners),
+		EligibleCandidates: candidateNames(kindCandidates),
+		SelectedOwner:      protocol.AgentName(selected.agent.Name),
+		TieBreak:           "route_priority desc, config_order asc",
+	}
+	if err := decision.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
+	}
+
+	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:    req.RunID,
+		Owner:          selected.agent.Name,
+		Goal:           req.Goal,
+		ExpectedOutput: req.ExpectedOutput,
+		ReviewRequired: req.ReviewRequired,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return task, decision, nil
 }
 
 type workflowMessageInput struct {
@@ -244,7 +315,7 @@ func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig
 		{
 			Name:      protocol.AgentName(coordinator.Name),
 			Alias:     coordinator.Alias,
-			Role:      coordinator.Role,
+			Role:      coordinator.Role.Kind,
 			Teammates: slices.Clone(coordinator.Teammates),
 		},
 	}
@@ -254,7 +325,7 @@ func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig
 		if !containsString(coordinator.Teammates, agent.Name) {
 			continue
 		}
-		if strings.TrimSpace(agent.Role) == "" {
+		if !agent.Role.IsDeclared() {
 			continue
 		}
 
@@ -262,7 +333,7 @@ func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig
 		snapshots = append(snapshots, protocol.AgentSnapshot{
 			Name:      protocol.AgentName(agent.Name),
 			Alias:     agent.Alias,
-			Role:      agent.Role,
+			Role:      agent.Role.Kind,
 			Teammates: slices.Clone(agent.Teammates),
 		})
 	}
@@ -296,6 +367,120 @@ func containsString(values []string, want string) bool {
 
 func containsAgentName(values []protocol.AgentName, want string) bool {
 	return slices.Contains(values, protocol.AgentName(want))
+}
+
+func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentName, taskClass protocol.TaskClass, domains []string) ([]routeCandidate, []routeCandidate) {
+	kindCandidates := make([]routeCandidate, 0, len(allowedOwners))
+	domainCandidates := make([]routeCandidate, 0, len(allowedOwners))
+
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
+		if !containsAgentName(allowedOwners, agent.Name) {
+			continue
+		}
+		if !agent.Role.IsDeclared() {
+			continue
+		}
+		if agent.Role.Kind != string(taskClass) {
+			continue
+		}
+
+		candidate := routeCandidate{agent: agent, index: i}
+		kindCandidates = append(kindCandidates, candidate)
+		if roleCoversDomains(agent.Role, domains) {
+			domainCandidates = append(domainCandidates, candidate)
+		}
+	}
+
+	return kindCandidates, domainCandidates
+}
+
+func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
+	owner, err := resolveAgentConfig(cfg, string(req.OwnerOverride))
+	if err != nil {
+		return nil, nil, err
+	}
+	if !containsAgentName(run.AllowedOwners, owner.Name) {
+		return nil, nil, fmt.Errorf("owner override %q is not an allowed owner for run %q", owner.Name, run.RunID)
+	}
+
+	decision := &protocol.RoutingDecision{
+		TaskClass:          req.TaskClass,
+		Domains:            slices.Clone(req.Domains),
+		AllowedOwners:      slices.Clone(run.AllowedOwners),
+		EligibleCandidates: candidateNames(kindCandidates),
+		SelectedOwner:      protocol.AgentName(owner.Name),
+		TieBreak:           "owner_override",
+	}
+	if err := decision.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
+	}
+
+	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:    req.RunID,
+		Owner:          owner.Name,
+		Goal:           req.Goal,
+		ExpectedOutput: req.ExpectedOutput,
+		ReviewRequired: req.ReviewRequired,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return task, decision, nil
+}
+
+func candidateNames(candidates []routeCandidate) []protocol.AgentName {
+	names := make([]protocol.AgentName, 0, len(candidates))
+	for _, candidate := range candidates {
+		names = append(names, protocol.AgentName(candidate.agent.Name))
+	}
+
+	return names
+}
+
+func rankCandidates(candidates []routeCandidate) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left := candidates[i]
+		right := candidates[j]
+		if left.agent.RoutePriority != right.agent.RoutePriority {
+			return left.agent.RoutePriority > right.agent.RoutePriority
+		}
+
+		return left.index < right.index
+	})
+}
+
+func roleCoversDomains(role config.RoleSpec, domains []string) bool {
+	roleDomains, err := protocol.NormalizeRouteDomains(role.Domains)
+	if err != nil {
+		return false
+	}
+
+	available := make(map[string]struct{}, len(roleDomains))
+	for _, domain := range roleDomains {
+		available[domain] = struct{}{}
+	}
+	for _, domain := range domains {
+		if _, ok := available[domain]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func routeSuggestions(taskClass protocol.TaskClass, candidates []routeCandidate) []string {
+	if len(candidates) == 0 {
+		return []string{
+			fmt.Sprintf("Choose a different task_class or add an allowed owner with role.kind %q.", taskClass),
+		}
+	}
+
+	return []string{
+		"Choose domains that are covered by one of the eligible_candidates.",
+		"Add the missing domain to an allowed owner's role.domains and retry.",
+	}
 }
 
 func buildChildTaskBody(run *protocol.CoordinatorRun, task *protocol.ChildTask) string {

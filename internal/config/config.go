@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
@@ -71,9 +72,9 @@ type TranscriptConfig struct {
 }
 
 type RoutingConfig struct {
-	Coordinator        string          `yaml:"coordinator"`
-	ExclusiveTaskKinds []protocol.Kind `yaml:"exclusive_task_kinds"`
-	FanoutTaskKinds    []protocol.Kind `yaml:"fanout_task_kinds"`
+	Coordinator          string               `yaml:"coordinator"`
+	ExclusiveTaskClasses []protocol.TaskClass `yaml:"exclusive_task_classes"`
+	FanoutTaskClasses    []protocol.TaskClass `yaml:"fanout_task_classes"`
 }
 
 type DefaultsConfig struct {
@@ -87,16 +88,39 @@ type NotifyConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
+type RoleSpec struct {
+	Kind        string   `yaml:"kind"`
+	Domains     []string `yaml:"domains,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+}
+
+func (r RoleSpec) IsDeclared() bool {
+	return strings.TrimSpace(r.Kind) != ""
+}
+
+func (r RoleSpec) String() string {
+	kind := strings.TrimSpace(r.Kind)
+	if kind == "" {
+		return ""
+	}
+	if len(r.Domains) == 0 {
+		return kind
+	}
+
+	return fmt.Sprintf("%s [%s]", kind, strings.Join(r.Domains, ", "))
+}
+
 type AgentConfig struct {
-	Name      string          `yaml:"name"`
-	Alias     string          `yaml:"alias"`
-	Adapter   string          `yaml:"adapter"`
-	Command   string          `yaml:"command"`
-	Role      string          `yaml:"role"`
-	Pane      PaneConfig      `yaml:"pane"`
-	Teammates []string        `yaml:"teammates"`
-	Bootstrap BootstrapConfig `yaml:"bootstrap"`
-	Workdir   string          `yaml:"workdir,omitempty"`
+	Name          string          `yaml:"name"`
+	Alias         string          `yaml:"alias"`
+	Adapter       string          `yaml:"adapter"`
+	Command       string          `yaml:"command"`
+	Role          RoleSpec        `yaml:"role"`
+	RoutePriority int             `yaml:"route_priority"`
+	Pane          PaneConfig      `yaml:"pane"`
+	Teammates     []string        `yaml:"teammates"`
+	Bootstrap     BootstrapConfig `yaml:"bootstrap"`
+	Workdir       string          `yaml:"workdir,omitempty"`
 }
 
 type BootstrapConfig struct {

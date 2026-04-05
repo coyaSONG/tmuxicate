@@ -9,6 +9,14 @@ type RunID string
 
 type TaskID string
 
+type TaskClass string
+
+const (
+	TaskClassImplementation TaskClass = "implementation"
+	TaskClassResearch       TaskClass = "research"
+	TaskClassReview         TaskClass = "review"
+)
+
 type AgentSnapshot struct {
 	Name      AgentName `yaml:"name"`
 	Alias     string    `yaml:"alias"`
@@ -39,6 +47,42 @@ type ChildTask struct {
 	MessageID      MessageID `yaml:"message_id,omitempty"`
 	ThreadID       ThreadID  `yaml:"thread_id,omitempty"`
 	CreatedAt      time.Time `yaml:"created_at"`
+}
+
+type RouteChildTaskRequest struct {
+	RunID          RunID     `yaml:"run_id"`
+	TaskClass      TaskClass `yaml:"task_class"`
+	Domains        []string  `yaml:"domains"`
+	Goal           string    `yaml:"goal"`
+	ExpectedOutput string    `yaml:"expected_output"`
+	ReviewRequired bool      `yaml:"review_required"`
+	OwnerOverride  AgentName `yaml:"owner_override,omitempty"`
+	OverrideReason string    `yaml:"override_reason,omitempty"`
+}
+
+type RoutingDecision struct {
+	TaskClass          TaskClass   `yaml:"task_class"`
+	Domains            []string    `yaml:"domains"`
+	AllowedOwners      []AgentName `yaml:"allowed_owners"`
+	EligibleCandidates []AgentName `yaml:"eligible_candidates"`
+	SelectedOwner      AgentName   `yaml:"selected_owner"`
+	TieBreak           string      `yaml:"tie_break"`
+}
+
+type RouteRejection struct {
+	TaskClass          TaskClass   `yaml:"task_class"`
+	Domains            []string    `yaml:"domains"`
+	AllowedOwners      []AgentName `yaml:"allowed_owners"`
+	EligibleCandidates []AgentName `yaml:"eligible_candidates"`
+	Suggestions        []string    `yaml:"suggestions"`
+}
+
+func (r *RouteRejection) Error() string {
+	if r == nil {
+		return "route rejected"
+	}
+
+	return fmt.Sprintf("route rejected for task_class=%q domains=%v", r.TaskClass, r.Domains)
 }
 
 func NewRunID(seq int64) RunID {

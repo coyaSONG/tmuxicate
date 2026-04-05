@@ -148,7 +148,7 @@ func ListPanes(stateDir string, client tmux.Client, opts ListPanesOpts) (string,
 
 		unreadCount, _ := countReceiptFiles(filepath.Join(stateDir, "agents", agent.Name, "inbox", "unread"))
 
-		role := agent.Role
+		role := agent.Role.String()
 		if role == "" {
 			role = "-"
 		}
@@ -180,7 +180,7 @@ func PreviewPane(stateDir string, client tmux.Client, opts PreviewPaneOpts) (str
 		if cfg.Agents[i].Alias == opts.Alias || cfg.Agents[i].Name == opts.Alias {
 			agentName = cfg.Agents[i].Name
 			alias = cfg.Agents[i].Alias
-			role = cfg.Agents[i].Role
+			role = cfg.Agents[i].Role.String()
 			break
 		}
 	}

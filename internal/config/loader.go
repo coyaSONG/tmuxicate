@@ -157,14 +157,16 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Routing.Coordinator) == "" {
 		return errors.New("routing.coordinator is required")
 	}
-	for _, kind := range c.Routing.ExclusiveTaskKinds {
-		if !isValidKind(kind) {
-			return fmt.Errorf("invalid routing.exclusive_task_kinds value %q", kind)
+	for i := range c.Routing.ExclusiveTaskClasses {
+		taskClass := c.Routing.ExclusiveTaskClasses[i]
+		if err := taskClass.Validate(); err != nil {
+			return fmt.Errorf("invalid routing.exclusive_task_classes value %q: %w", taskClass, err)
 		}
 	}
-	for _, kind := range c.Routing.FanoutTaskKinds {
-		if !isValidKind(kind) {
-			return fmt.Errorf("invalid routing.fanout_task_kinds value %q", kind)
+	for i := range c.Routing.FanoutTaskClasses {
+		taskClass := c.Routing.FanoutTaskClasses[i]
+		if err := taskClass.Validate(); err != nil {
+			return fmt.Errorf("invalid routing.fanout_task_classes value %q: %w", taskClass, err)
 		}
 	}
 
@@ -204,8 +206,24 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(agent.Command) == "" {
 			return fmt.Errorf("%s.command is required", prefix)
 		}
-		if strings.TrimSpace(agent.Role) == "" {
-			return fmt.Errorf("%s.role is required", prefix)
+		if !agent.Role.IsDeclared() {
+			return fmt.Errorf("%s.role.kind is required", prefix)
+		}
+		taskClass := protocol.TaskClass(strings.TrimSpace(agent.Role.Kind))
+		if err := taskClass.Validate(); err != nil {
+			return fmt.Errorf("%s.role.kind %q is invalid: %w", prefix, agent.Role.Kind, err)
+		}
+		normalizedDomains, err := protocol.NormalizeRouteDomains(agent.Role.Domains)
+		if err != nil {
+			return fmt.Errorf("%s.role.domains: %w", prefix, err)
+		}
+		if len(normalizedDomains) == 0 {
+			return fmt.Errorf("%s.role.domains must contain at least one domain", prefix)
+		}
+		agent.Role.Kind = string(taskClass)
+		agent.Role.Domains = normalizedDomains
+		if agent.RoutePriority < 0 {
+			return fmt.Errorf("%s.route_priority must be >= 0", prefix)
 		}
 		if strings.TrimSpace(agent.Pane.Slot) == "" {
 			return fmt.Errorf("%s.pane.slot is required", prefix)
@@ -302,11 +320,11 @@ func (c *Config) clone() Config {
 		}
 	}
 
-	if c.Routing.ExclusiveTaskKinds != nil {
-		clone.Routing.ExclusiveTaskKinds = append([]protocol.Kind(nil), c.Routing.ExclusiveTaskKinds...)
+	if c.Routing.ExclusiveTaskClasses != nil {
+		clone.Routing.ExclusiveTaskClasses = append([]protocol.TaskClass(nil), c.Routing.ExclusiveTaskClasses...)
 	}
-	if c.Routing.FanoutTaskKinds != nil {
-		clone.Routing.FanoutTaskKinds = append([]protocol.Kind(nil), c.Routing.FanoutTaskKinds...)
+	if c.Routing.FanoutTaskClasses != nil {
+		clone.Routing.FanoutTaskClasses = append([]protocol.TaskClass(nil), c.Routing.FanoutTaskClasses...)
 	}
 	if c.Agents != nil {
 		clone.Agents = make([]AgentConfig, len(c.Agents))
@@ -314,6 +332,9 @@ func (c *Config) clone() Config {
 		for i := range c.Agents {
 			if c.Agents[i].Teammates != nil {
 				clone.Agents[i].Teammates = append([]string(nil), c.Agents[i].Teammates...)
+			}
+			if c.Agents[i].Role.Domains != nil {
+				clone.Agents[i].Role.Domains = append([]string(nil), c.Agents[i].Role.Domains...)
 			}
 		}
 	}
@@ -352,15 +373,6 @@ func isValidDeliveryMode(s string) bool {
 func isValidLayout(s string) bool {
 	switch s {
 	case "triad", "tiled", "main-vertical", "main-horizontal", "even-horizontal", "even-vertical":
-		return true
-	default:
-		return false
-	}
-}
-
-func isValidKind(k protocol.Kind) bool {
-	switch k {
-	case protocol.KindTask, protocol.KindQuestion, protocol.KindReviewRequest, protocol.KindReviewResponse, protocol.KindDecision, protocol.KindStatusRequest, protocol.KindStatusResponse, protocol.KindNote:
 		return true
 	default:
 		return false

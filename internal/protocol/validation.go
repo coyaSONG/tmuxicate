@@ -3,6 +3,7 @@ package protocol
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -243,6 +244,102 @@ func (t *ChildTask) Validate() error {
 	return nil
 }
 
+func (c TaskClass) Validate() error {
+	switch c {
+	case TaskClassImplementation, TaskClassResearch, TaskClassReview:
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q, %q, or %q", TaskClassImplementation, TaskClassResearch, TaskClassReview)
+	}
+}
+
+func (r *RouteChildTaskRequest) Validate() error {
+	if r == nil {
+		return errors.New("route request is required")
+	}
+	if !isGeneratedRunID(r.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if err := r.TaskClass.Validate(); err != nil {
+		return fmt.Errorf("task_class: %w", err)
+	}
+	domains, err := NormalizeRouteDomains(r.Domains)
+	if err != nil {
+		return fmt.Errorf("domains: %w", err)
+	}
+	if len(domains) == 0 {
+		return errors.New("domains must contain at least one domain")
+	}
+	if strings.TrimSpace(r.Goal) == "" {
+		return errors.New("goal is required")
+	}
+	if strings.TrimSpace(r.ExpectedOutput) == "" {
+		return errors.New("expected_output is required")
+	}
+	if r.OwnerOverride != "" && strings.TrimSpace(r.OverrideReason) == "" {
+		return errors.New("override_reason is required when owner_override is set")
+	}
+
+	r.Domains = domains
+	return nil
+}
+
+func (d *RoutingDecision) Validate() error {
+	if d == nil {
+		return errors.New("routing decision is required")
+	}
+	if err := d.TaskClass.Validate(); err != nil {
+		return fmt.Errorf("task_class: %w", err)
+	}
+	domains, err := NormalizeRouteDomains(d.Domains)
+	if err != nil {
+		return fmt.Errorf("domains: %w", err)
+	}
+	if len(domains) == 0 {
+		return errors.New("domains must contain at least one domain")
+	}
+	if len(d.AllowedOwners) == 0 {
+		return errors.New("allowed_owners must contain at least one owner")
+	}
+	if len(d.EligibleCandidates) == 0 {
+		return errors.New("eligible_candidates must contain at least one candidate")
+	}
+	if strings.TrimSpace(string(d.SelectedOwner)) == "" {
+		return errors.New("selected_owner is required")
+	}
+	if strings.TrimSpace(d.TieBreak) == "" {
+		return errors.New("tie_break is required")
+	}
+
+	d.Domains = domains
+	return nil
+}
+
+func (r *RouteRejection) Validate() error {
+	if r == nil {
+		return errors.New("route rejection is required")
+	}
+	if err := r.TaskClass.Validate(); err != nil {
+		return fmt.Errorf("task_class: %w", err)
+	}
+	domains, err := NormalizeRouteDomains(r.Domains)
+	if err != nil {
+		return fmt.Errorf("domains: %w", err)
+	}
+	if len(domains) == 0 {
+		return errors.New("domains must contain at least one domain")
+	}
+	if len(r.AllowedOwners) == 0 {
+		return errors.New("allowed_owners must contain at least one owner")
+	}
+	if len(r.Suggestions) == 0 {
+		return errors.New("suggestions must contain at least one retry hint")
+	}
+
+	r.Domains = domains
+	return nil
+}
+
 func isValidKind(k Kind) bool {
 	switch k {
 	case KindTask, KindQuestion, KindReviewRequest, KindReviewResponse, KindDecision, KindStatusRequest, KindStatusResponse, KindNote:
@@ -250,6 +347,39 @@ func isValidKind(k Kind) bool {
 	default:
 		return false
 	}
+}
+
+func NormalizeRouteDomains(domains []string) ([]string, error) {
+	normalized := make([]string, 0, len(domains))
+	seen := make(map[string]struct{}, len(domains))
+
+	for i, domain := range domains {
+		value := strings.ToLower(strings.TrimSpace(domain))
+		if value == "" {
+			return nil, fmt.Errorf("domains[%d] must not be blank", i)
+		}
+		for _, r := range value {
+			switch {
+			case r >= 'a' && r <= 'z':
+			case r >= '0' && r <= '9':
+			case r == '-' || r == '_':
+			default:
+				return nil, fmt.Errorf("domains[%d] must contain only lowercase letters, digits, hyphen, or underscore", i)
+			}
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+
+	slices.Sort(normalized)
+	return normalized, nil
 }
 
 func isValidPriority(p Priority) bool {

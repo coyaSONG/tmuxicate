@@ -349,7 +349,7 @@ func renderBootstrap(cfg *config.ResolvedConfig, agent *config.AgentConfig) stri
 	for _, teammateName := range agent.Teammates {
 		for i := range cfg.Agents {
 			if cfg.Agents[i].Name == teammateName {
-				teamLines = append(teamLines, fmt.Sprintf("- %s (alias: %s): %s", cfg.Agents[i].Name, cfg.Agents[i].Alias, cfg.Agents[i].Role))
+				teamLines = append(teamLines, fmt.Sprintf("- %s (alias: %s): %s", cfg.Agents[i].Name, cfg.Agents[i].Alias, cfg.Agents[i].Role.String()))
 				break
 			}
 		}
@@ -387,7 +387,7 @@ Working rules
 
 Extra instructions
 %s
-`, agent.Name, agent.Alias, cfg.Session.Name, agent.Role, strings.Join(teamLines, "\n"), strings.TrimSpace(agent.Bootstrap.ExtraInstructions))
+`, agent.Name, agent.Alias, cfg.Session.Name, agent.Role.String(), strings.Join(teamLines, "\n"), strings.TrimSpace(agent.Bootstrap.ExtraInstructions))
 
 	return text
 }
