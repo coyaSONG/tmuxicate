@@ -47,7 +47,7 @@ Plans:
 
 Plans:
 - [x] 02-01: Implement coordinator routing policy over agent config metadata
-- [ ] 02-02: Add routing safeguards and duplicate-assignment tests
+- [x] 02-02: Add routing safeguards and duplicate-assignment tests
 
 ### Phase 3: Review Handoff Flow
 **Goal**: Completed implementation work can transition into a linked review workflow inside the same coordinator run.
