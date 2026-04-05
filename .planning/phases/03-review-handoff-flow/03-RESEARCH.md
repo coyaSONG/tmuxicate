@@ -312,22 +312,16 @@ Source: `internal/session/reply.go`. [VERIFIED: internal/session/reply.go]
 
 All substantive claims in this research were verified against local planning artifacts, repo code, or local command output; no user confirmation is required for unstated assumptions. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md][VERIFIED: internal/session/run.go][VERIFIED: go test ./... -count=1]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **How should the review task message be typed?** [VERIFIED: internal/session/run.go][VERIFIED: internal/session/reply.go]  
-   What we know: routed child tasks currently emit `kind: task`, while `replyKind()` only produces `review_response` when the parent is `review_request`. [VERIFIED: internal/session/run.go][VERIFIED: internal/session/reply.go]  
-   What's unclear: whether Phase 3 should let routed review-task creation override message kind to `review_request`, or whether the dedicated review-response command should emit `review_response` without depending on generic `Reply()`. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md]  
-   Recommendation: decide this in Wave 0 before coding storage or CLI details, because it changes both tests and operator-visible message kinds. [VERIFIED: internal/session/reply.go][VERIFIED: cmd/tmuxicate/main.go]
+   Resolution: routed review child-task creation should emit `kind: review_request` instead of generic `task`, and the dedicated review-response command can then reuse the existing `Reply()` path so the response message is typed `review_response` through `replyKind()`. This keeps message kinds explicit, operator-visible, and consistent with the dedicated review-response CLI decision from `03-CONTEXT.md`. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md][VERIFIED: internal/session/reply.go][VERIFIED: cmd/tmuxicate/main.go]
 
 2. **What should happen for source implementation tasks that lack routed domains?** [VERIFIED: internal/protocol/validation.go][VERIFIED: internal/session/run_contracts.go]  
-   What we know: `RouteChildTask` requires non-empty normalized domains, but plain `add-task` can create source tasks with no routing metadata. [VERIFIED: internal/protocol/validation.go][VERIFIED: cmd/tmuxicate/main.go]  
-   What's unclear: whether Phase 3 should reject those source tasks for auto handoff, infer review domains from some other artifact, or introduce an explicit annotation path. [VERIFIED: code gap from internal/protocol/coordinator.go][VERIFIED: internal/session/run.go]  
-   Recommendation: prefer fail-loud handoff failure in Phase 3 rather than inventing domains, because no-guessing behavior matches the current routing philosophy. [VERIFIED: .planning/PROJECT.md][VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md]
+   Resolution: Phase 3 should fail loudly. If a source implementation task has no usable `normalized_domains`, automatic handoff must record `status: handoff_failed` plus a failure summary on the canonical `ReviewHandoff` artifact and must not invent review-routing domains or roll back the source task's `done` state. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md][VERIFIED: .planning/PROJECT.md]
 
 3. **How broad should new coordinator-store helpers be?** [VERIFIED: internal/mailbox/coordinator_store.go]  
-   What we know: the store currently supports `CreateRun`, `ReadRun`, and `CreateTask`, but not task lookup by message ID, run task listing, review artifact CRUD, or updates to existing coordinator artifacts. [VERIFIED: internal/mailbox/coordinator_store.go][VERIFIED: internal/session/run_rebuild.go]  
-   What's unclear: whether Phase 3 should introduce generic update/read/list methods for all coordinator artifacts or stay narrow with review-focused helpers. [VERIFIED: code gap from internal/mailbox/coordinator_store.go]  
-   Recommendation: keep Phase 3 narrow with `ReadTask`, `ListRunTasks`, `FindTaskByMessageID`, and `CreateOrUpdateReviewHandoff` style helpers; generalize later only if Phase 4 or 5 need it. [VERIFIED: internal/session/task_cmd.go][VERIFIED: internal/session/run_rebuild.go]
+   Resolution: keep Phase 3 narrow and review-focused. Add the minimum helpers the plans require, such as `ReadTask`, targeted review-handoff CRUD/update helpers, and lookup support for response recording. Do not generalize the coordinator store into a second orchestration layer in this phase. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md][VERIFIED: internal/mailbox/coordinator_store.go][VERIFIED: internal/session/run_rebuild.go]
 
 ## Validation Architecture
 
