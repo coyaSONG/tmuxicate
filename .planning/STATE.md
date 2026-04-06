@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 5
-current_phase_name: run summaries
-current_plan: Not started
-status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-04-06T14:49:59.027Z"
-last_activity: 2026-04-06 -- Phase 05 planning complete
+current_phase: 05
+current_phase_name: run-summaries
+current_plan: Complete
+status: complete
+stopped_at: Phase 05 complete
+last_updated: "2026-04-06T15:28:49.866Z"
+last_activity: 2026-04-06 -- Phase 05 complete
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -24,28 +24,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 04 — blocker-escalation
+**Current focus:** Milestone v1.0 complete
 
 ## Current Position
 
-Phase: 04 (blocker-escalation) — EXECUTING
-Current Phase: 5
-Current Phase Name: run summaries
-Plan: 1 of 3
-Current Plan: Not started
+Phase: 05 (run-summaries) — COMPLETE
+Current Phase: 05
+Current Phase Name: run-summaries
+Plan: 2 of 2
+Current Plan: Complete
 Total Plans in Phase: 2
 Total Phases: 5
-Status: Ready to execute
-Last activity: 2026-04-06 -- Phase 05 planning complete
-Last Activity Description: Phase 05 planning complete — 2 plans ready
+Status: Milestone v1.0 complete
+Last activity: 2026-04-06 -- Phase 05 complete
+Last Activity Description: Phase 05 complete
 
-Progress: [██████░░░░] 60%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 10
+- Total plans completed: 12
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -57,6 +57,7 @@ Progress: [██████░░░░] 60%
 | 02 | 2 | - | - |
 | 03 | 2 | - | - |
 | 04 | 3 | - | - |
+| 05 | 2 | - | - |
 
 **Recent Trend:**
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Routed child tasks persist normalized domains, duplicate keys, and routing decisions directly on canonical task YAML so run show explains routes from disk alone.
 - [Phase 03]: Review linkage is canonicalized in `coordinator/runs/<run-id>/reviews/<source-task-id>.yaml` instead of reverse pointers on task records.
 - [Phase 03]: Review tasks use dedicated `review_request` and `review_response` message kinds, and `run show` rebuilds the review chain from durable artifacts.
+- [Phase 04]: Blocker handling uses durable `BlockerCase` artifacts with explicit reroute, escalation, and operator resolution paths.
+- [Phase 05]: Run summaries are a derived `RunGraph` view rendered at the top of `run show`, not a new persisted artifact or command family.
+- [Phase 05]: Completing the coordinator root task prints the same shared summary once using canonical root-message metadata.
 
 ### Pending Todos
 
@@ -102,5 +106,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-06T14:03:56.120Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-run-summaries/05-CONTEXT.md
+Stopped at: Phase 05 complete
+Resume file: .planning/phases/05-run-summaries/05-VERIFICATION.md

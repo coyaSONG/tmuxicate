@@ -23,14 +23,14 @@
 
 ### Blockers
 
-- [ ] **BLOCK-01**: Coordinator reacts to child task `wait` and `block` states with an explicit next step instead of silently stalling
-- [ ] **BLOCK-02**: Coordinator can escalate blocked or ambiguous work to the human operator with current owner, blocker reason, and recommended action
-- [ ] **BLOCK-03**: Coordinator stops retrying or rerouting after defined limits and surfaces the unresolved task instead of looping indefinitely
+- [x] **BLOCK-01**: Coordinator reacts to child task `wait` and `block` states with an explicit next step instead of silently stalling
+- [x] **BLOCK-02**: Coordinator can escalate blocked or ambiguous work to the human operator with current owner, blocker reason, and recommended action
+- [x] **BLOCK-03**: Coordinator stops retrying or rerouting after defined limits and surfaces the unresolved task instead of looping indefinitely
 
 ### Summaries
 
-- [ ] **SUM-01**: Operator can get an end-of-run summary that lists completed, waiting, blocked, under-review, and escalated work
-- [ ] **SUM-02**: Run summaries identify the responsible agent and related message or task references for each reported item
+- [x] **SUM-01**: Operator can get an end-of-run summary that lists completed, waiting, blocked, under-review, and escalated work
+- [x] **SUM-02**: Run summaries identify the responsible agent and related message or task references for each reported item
 
 ## v2 Requirements
 
@@ -65,11 +65,11 @@
 | ROUTE-02 | Phase 2 | Complete |
 | REVIEW-01 | Phase 3 | Complete |
 | REVIEW-02 | Phase 3 | Complete |
-| BLOCK-01 | Phase 4 | Pending |
-| BLOCK-02 | Phase 4 | Pending |
-| BLOCK-03 | Phase 4 | Pending |
-| SUM-01 | Phase 5 | Pending |
-| SUM-02 | Phase 5 | Pending |
+| BLOCK-01 | Phase 4 | Complete |
+| BLOCK-02 | Phase 4 | Complete |
+| BLOCK-03 | Phase 4 | Complete |
+| SUM-01 | Phase 5 | Complete |
+| SUM-02 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total
@@ -78,4 +78,4 @@
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-06 after Phase 03 completion*
+*Last updated: 2026-04-06 after Phase 05 completion*
