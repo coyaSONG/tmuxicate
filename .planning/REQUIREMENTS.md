@@ -18,8 +18,8 @@
 
 ### Review
 
-- [ ] **REVIEW-01**: Coordinator can hand completed implementation work to a reviewer as a linked follow-up task
-- [ ] **REVIEW-02**: Reviewer response remains linked to the originating coordinator run so the operator can trace implementation and review in one flow
+- [x] **REVIEW-01**: Coordinator can hand completed implementation work to a reviewer as a linked follow-up task
+- [x] **REVIEW-02**: Reviewer response remains linked to the originating coordinator run so the operator can trace implementation and review in one flow
 
 ### Blockers
 
@@ -63,8 +63,8 @@
 | PLAN-03 | Phase 1 | Complete |
 | ROUTE-01 | Phase 2 | Complete |
 | ROUTE-02 | Phase 2 | Complete |
-| REVIEW-01 | Phase 3 | Pending |
-| REVIEW-02 | Phase 3 | Pending |
+| REVIEW-01 | Phase 3 | Complete |
+| REVIEW-02 | Phase 3 | Complete |
 | BLOCK-01 | Phase 4 | Pending |
 | BLOCK-02 | Phase 4 | Pending |
 | BLOCK-03 | Phase 4 | Pending |
@@ -78,4 +78,4 @@
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after roadmap creation*
+*Last updated: 2026-04-06 after Phase 03 completion*

@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Coordinator Foundations** - Create durable coordinator runs and child task graph primitives (completed 2026-04-05)
 - [x] **Phase 2: Role-Based Routing** - Assign work to the right agents without duplicate execution (completed 2026-04-05)
-- [ ] **Phase 3: Review Handoff Flow** - Move implementation work into linked review tasks and responses
+- [x] **Phase 3: Review Handoff Flow** - Move implementation work into linked review tasks and responses (completed 2026-04-06)
 - [ ] **Phase 4: Blocker Escalation** - Add safe handling for wait, block, reroute, and human escalation
 - [ ] **Phase 5: Run Summaries** - Provide trustworthy operator-facing summaries for coordinator runs
 
@@ -60,8 +60,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Automatic review handoff creation from implementation task completion
-- [ ] 03-02-PLAN.md — Review responses and `run show` review-chain visibility
+- [x] 03-01-PLAN.md — Automatic review handoff creation from implementation task completion
+- [x] 03-02-PLAN.md — Review responses and `run show` review-chain visibility
 
 ### Phase 4: Blocker Escalation
 **Goal**: Coordinator handles wait/block states safely through explicit reroute, escalation, and retry limits.
@@ -101,6 +101,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Coordinator Foundations | 3/3 | Complete   | 2026-04-05 |
 | 2. Role-Based Routing | 2/2 | Complete | 2026-04-05 |
-| 3. Review Handoff Flow | 0/2 | Not started | - |
+| 3. Review Handoff Flow | 2/2 | Complete | 2026-04-06 |
 | 4. Blocker Escalation | 0/3 | Not started | - |
 | 5. Run Summaries | 0/2 | Not started | - |
