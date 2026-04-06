@@ -169,6 +169,17 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid routing.fanout_task_classes value %q: %w", taskClass, err)
 		}
 	}
+	if c.Blockers.MaxReroutesDefault < 0 {
+		return errors.New("blockers.max_reroutes_default must be >= 0")
+	}
+	for taskClass, maxReroutes := range c.Blockers.MaxReroutesByTaskClass {
+		if err := taskClass.Validate(); err != nil {
+			return fmt.Errorf("blockers.max_reroutes_by_task_class[%q] is invalid: %w", taskClass, err)
+		}
+		if maxReroutes < 0 {
+			return fmt.Errorf("blockers.max_reroutes_by_task_class[%q] must be >= 0", taskClass)
+		}
+	}
 
 	if strings.TrimSpace(c.Defaults.Workdir) == "" {
 		return errors.New("defaults.workdir is required")
@@ -281,6 +292,9 @@ func (c *Config) applyDefaults() {
 	if c.Delivery.AutoNotify == nil {
 		c.Delivery.AutoNotify = boolPtr(true)
 	}
+	if !c.Blockers.maxReroutesDefaultSet && c.Blockers.MaxReroutesDefault == 0 {
+		c.Blockers.MaxReroutesDefault = 1
+	}
 
 	if c.Transcript.Mode == "" {
 		c.Transcript.Mode = "pipe-pane"
@@ -325,6 +339,12 @@ func (c *Config) clone() Config {
 	}
 	if c.Routing.FanoutTaskClasses != nil {
 		clone.Routing.FanoutTaskClasses = append([]protocol.TaskClass(nil), c.Routing.FanoutTaskClasses...)
+	}
+	if c.Blockers.MaxReroutesByTaskClass != nil {
+		clone.Blockers.MaxReroutesByTaskClass = make(map[protocol.TaskClass]int, len(c.Blockers.MaxReroutesByTaskClass))
+		for taskClass, maxReroutes := range c.Blockers.MaxReroutesByTaskClass {
+			clone.Blockers.MaxReroutesByTaskClass[taskClass] = maxReroutes
+		}
 	}
 	if c.Agents != nil {
 		clone.Agents = make([]AgentConfig, len(c.Agents))

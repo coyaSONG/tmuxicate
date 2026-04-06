@@ -44,6 +44,7 @@ type Config struct {
 	Delivery   DeliveryConfig   `yaml:"delivery"`
 	Transcript TranscriptConfig `yaml:"transcript"`
 	Routing    RoutingConfig    `yaml:"routing"`
+	Blockers   BlockersConfig   `yaml:"blockers"`
 	Defaults   DefaultsConfig   `yaml:"defaults"`
 	Agents     []AgentConfig    `yaml:"agents"`
 }
@@ -75,6 +76,13 @@ type RoutingConfig struct {
 	Coordinator          string               `yaml:"coordinator"`
 	ExclusiveTaskClasses []protocol.TaskClass `yaml:"exclusive_task_classes"`
 	FanoutTaskClasses    []protocol.TaskClass `yaml:"fanout_task_classes"`
+}
+
+type BlockersConfig struct {
+	MaxReroutesDefault     int                        `yaml:"max_reroutes_default"`
+	MaxReroutesByTaskClass map[protocol.TaskClass]int `yaml:"max_reroutes_by_task_class"`
+
+	maxReroutesDefaultSet bool `yaml:"-"`
 }
 
 type DefaultsConfig struct {
@@ -129,4 +137,35 @@ type BootstrapConfig struct {
 
 type PaneConfig struct {
 	Slot string `yaml:"slot"`
+}
+
+func (b *BlockersConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	if b == nil {
+		return nil
+	}
+
+	var raw struct {
+		MaxReroutesDefault     *int                       `yaml:"max_reroutes_default"`
+		MaxReroutesByTaskClass map[protocol.TaskClass]int `yaml:"max_reroutes_by_task_class"`
+	}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	b.MaxReroutesDefault = 0
+	b.maxReroutesDefaultSet = false
+	if raw.MaxReroutesDefault != nil {
+		b.MaxReroutesDefault = *raw.MaxReroutesDefault
+		b.maxReroutesDefaultSet = true
+	}
+	if raw.MaxReroutesByTaskClass != nil {
+		b.MaxReroutesByTaskClass = make(map[protocol.TaskClass]int, len(raw.MaxReroutesByTaskClass))
+		for taskClass, maxReroutes := range raw.MaxReroutesByTaskClass {
+			b.MaxReroutesByTaskClass[taskClass] = maxReroutes
+		}
+	} else {
+		b.MaxReroutesByTaskClass = nil
+	}
+
+	return nil
 }
