@@ -192,6 +192,52 @@ func TestRunShowIncludesReviewHandoffBlock(t *testing.T) {
 	}
 }
 
+func TestFormatRunGraphIncludesSummaryBeforeTaskDetails(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedPendingReviewFixture(t)
+	createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+
+	graph, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	if !strings.HasPrefix(output, "Run: "+string(fixture.run.RunID)+"\n") {
+		t.Fatalf("expected run show output to start with run header\noutput:\n%s", output)
+	}
+
+	summaryIndex := strings.Index(output, "Summary:\n")
+	if summaryIndex == -1 {
+		t.Fatalf("expected run show output to include summary block\noutput:\n%s", output)
+	}
+
+	firstTaskIndex := strings.Index(output, "\nTask: ")
+	if firstTaskIndex == -1 {
+		t.Fatalf("expected run show output to include task detail blocks\noutput:\n%s", output)
+	}
+	if summaryIndex > firstTaskIndex {
+		t.Fatalf("expected summary block before first task block\noutput:\n%s", output)
+	}
+
+	expectedSummary := FormatRunSummary(BuildRunSummary(graph))
+	actualSummary := output[summaryIndex:firstTaskIndex]
+	if strings.TrimSpace(actualSummary) != strings.TrimSpace(expectedSummary) {
+		t.Fatalf("summary block mismatch\nactual:\n%s\nexpected:\n%s", actualSummary, expectedSummary)
+	}
+
+	reviewIndex := strings.Index(output, "Review Handoff: pending")
+	if reviewIndex == -1 || reviewIndex < firstTaskIndex {
+		t.Fatalf("expected task-local review detail below summary\noutput:\n%s", output)
+	}
+
+	blockerIndex := strings.Index(output, "Blocker: escalated")
+	if blockerIndex == -1 || blockerIndex < firstTaskIndex {
+		t.Fatalf("expected task-local blocker detail below summary\noutput:\n%s", output)
+	}
+}
+
 func TestRunShowIncludesTaskLocalBlockerBlock(t *testing.T) {
 	t.Parallel()
 
