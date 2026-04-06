@@ -2,11 +2,14 @@ package session
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/coyaSONG/tmuxicate/internal/config"
 	"github.com/coyaSONG/tmuxicate/internal/mailbox"
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
 )
@@ -164,7 +167,7 @@ func TaskDone(stateDir, agent string, msgID protocol.MessageID, summary string) 
 		return err
 	}
 
-	return appendStateEvent(stateDir, agentName, &TaskEvent{
+	if err := appendStateEvent(stateDir, agentName, &TaskEvent{
 		Schema:        "tmuxicate/state-event/v1",
 		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Agent:         agentName,
@@ -174,7 +177,11 @@ func TaskDone(stateDir, agent string, msgID protocol.MessageID, summary string) 
 		Thread:        result.Thread,
 		ReceiptState:  protocol.FolderStateDone,
 		Summary:       summary,
-	})
+	}); err != nil {
+		return err
+	}
+
+	return createReviewHandoffAfterTaskDone(stateDir, store, msgID)
 }
 
 func loadActiveTask(stateDir, agent string, msgID protocol.MessageID) (*ReadResult, *protocol.Receipt, string, error) {
@@ -246,4 +253,153 @@ func appendStateEvent(stateDir, agent string, event *TaskEvent) error {
 	}
 
 	return nil
+}
+
+func createReviewHandoffAfterTaskDone(stateDir string, store *mailbox.Store, msgID protocol.MessageID) error {
+	env, _, err := store.ReadMessage(msgID)
+	if err != nil {
+		return fmt.Errorf("read completed task message: %w", err)
+	}
+
+	runIDValue := strings.TrimSpace(env.Meta["parent_run_id"])
+	taskIDValue := strings.TrimSpace(env.Meta["task_id"])
+	if runIDValue == "" || taskIDValue == "" {
+		return nil
+	}
+
+	runID := protocol.RunID(runIDValue)
+	sourceTaskID := protocol.TaskID(taskIDValue)
+	coordinatorStore := mailbox.NewCoordinatorStore(stateDir)
+	sourceTask, err := coordinatorStore.ReadTask(runID, sourceTaskID)
+	if err != nil {
+		return upsertFailedReviewHandoff(coordinatorStore, &protocol.ReviewHandoff{
+			RunID:           runID,
+			SourceTaskID:    sourceTaskID,
+			SourceMessageID: env.ID,
+			Status:          protocol.ReviewHandoffStatusHandoffFailed,
+			FailureSummary:  fmt.Sprintf("source task %s could not be loaded for review routing: %v", sourceTaskID, err),
+		})
+	}
+
+	if sourceTask.TaskClass != protocol.TaskClassImplementation || !sourceTask.ReviewRequired {
+		return nil
+	}
+
+	if _, err := coordinatorStore.ReadReviewHandoff(runID, sourceTaskID); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	if len(sourceTask.NormalizedDomains) == 0 {
+		return upsertFailedReviewHandoff(coordinatorStore, &protocol.ReviewHandoff{
+			RunID:           runID,
+			SourceTaskID:    sourceTaskID,
+			SourceMessageID: env.ID,
+			Status:          protocol.ReviewHandoffStatusHandoffFailed,
+			FailureSummary:  fmt.Sprintf("source task %s missing normalized_domains for review routing", sourceTaskID),
+		})
+	}
+
+	cfg, err := loadResolvedConfigFromStateDir(stateDir)
+	if err != nil {
+		return upsertFailedReviewHandoff(coordinatorStore, &protocol.ReviewHandoff{
+			RunID:           runID,
+			SourceTaskID:    sourceTaskID,
+			SourceMessageID: env.ID,
+			Status:          protocol.ReviewHandoffStatusHandoffFailed,
+			FailureSummary:  fmt.Sprintf("load resolved config for review routing: %v", err),
+		})
+	}
+
+	reviewTask, err := routeReviewTask(cfg, store, sourceTask)
+	if err != nil {
+		return upsertFailedReviewHandoff(coordinatorStore, &protocol.ReviewHandoff{
+			RunID:           runID,
+			SourceTaskID:    sourceTaskID,
+			SourceMessageID: env.ID,
+			Status:          protocol.ReviewHandoffStatusHandoffFailed,
+			FailureSummary:  fmt.Sprintf("route review handoff for %s: %v", sourceTaskID, err),
+		})
+	}
+
+	handoff := &protocol.ReviewHandoff{
+		RunID:           runID,
+		SourceTaskID:    sourceTaskID,
+		SourceMessageID: env.ID,
+		ReviewTaskID:    reviewTask.TaskID,
+		ReviewMessageID: reviewTask.MessageID,
+		Reviewer:        reviewTask.Owner,
+		Status:          protocol.ReviewHandoffStatusPending,
+		CreatedAt:       time.Now().UTC(),
+	}
+	if err := coordinatorStore.CreateReviewHandoff(handoff); err != nil {
+		return upsertFailedReviewHandoff(coordinatorStore, &protocol.ReviewHandoff{
+			RunID:           runID,
+			SourceTaskID:    sourceTaskID,
+			SourceMessageID: env.ID,
+			ReviewTaskID:    reviewTask.TaskID,
+			ReviewMessageID: reviewTask.MessageID,
+			Reviewer:        reviewTask.Owner,
+			Status:          protocol.ReviewHandoffStatusHandoffFailed,
+			FailureSummary:  fmt.Sprintf("persist review handoff for %s: %v", sourceTaskID, err),
+		})
+	}
+
+	return nil
+}
+
+func routeReviewTask(cfg *config.ResolvedConfig, store *mailbox.Store, sourceTask *protocol.ChildTask) (*protocol.ChildTask, error) {
+	reviewTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          sourceTask.ParentRunID,
+		TaskClass:      protocol.TaskClassReview,
+		Domains:        append([]string(nil), sourceTask.NormalizedDomains...),
+		Goal:           fmt.Sprintf("Review implementation task %s: %s", sourceTask.TaskID, sourceTask.Goal),
+		ExpectedOutput: fmt.Sprintf("Submit approved or changes_requested for %s via tmuxicate review respond", sourceTask.TaskID),
+		ReviewRequired: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return reviewTask, nil
+}
+
+func upsertFailedReviewHandoff(coordinatorStore *mailbox.CoordinatorStore, handoff *protocol.ReviewHandoff) error {
+	if coordinatorStore == nil {
+		return fmt.Errorf("coordinator store is required")
+	}
+	if handoff == nil {
+		return fmt.Errorf("review handoff is required")
+	}
+
+	now := time.Now().UTC()
+	if handoff.CreatedAt.IsZero() {
+		handoff.CreatedAt = now
+	}
+
+	if _, err := coordinatorStore.ReadReviewHandoff(handoff.RunID, handoff.SourceTaskID); err == nil {
+		return coordinatorStore.UpdateReviewHandoff(handoff.RunID, handoff.SourceTaskID, func(existing *protocol.ReviewHandoff) error {
+			if existing.SourceMessageID == "" {
+				existing.SourceMessageID = handoff.SourceMessageID
+			}
+			if handoff.ReviewTaskID != "" {
+				existing.ReviewTaskID = handoff.ReviewTaskID
+			}
+			if handoff.ReviewMessageID != "" {
+				existing.ReviewMessageID = handoff.ReviewMessageID
+			}
+			if handoff.Reviewer != "" {
+				existing.Reviewer = handoff.Reviewer
+			}
+			existing.Status = protocol.ReviewHandoffStatusHandoffFailed
+			existing.FailureSummary = handoff.FailureSummary
+			return nil
+		})
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	handoff.Status = protocol.ReviewHandoffStatusHandoffFailed
+	return coordinatorStore.CreateReviewHandoff(handoff)
 }

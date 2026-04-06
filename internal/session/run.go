@@ -194,6 +194,11 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		return nil, err
 	}
 
+	messageKind := protocol.KindTask
+	if task.TaskClass == protocol.TaskClassReview {
+		messageKind = protocol.KindReviewRequest
+	}
+
 	if err := createWorkflowMessage(cfg, store, workflowMessageInput{
 		Seq:           messageSeq,
 		MessageID:     task.MessageID,
@@ -203,7 +208,7 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		To:            task.Owner,
 		Subject:       fmt.Sprintf("Task %s: %s", task.TaskID, summarizeSubject(task.Goal)),
 		Body:          body,
-		Kind:          protocol.KindTask,
+		Kind:          messageKind,
 		RequiresClaim: true,
 		Meta: map[string]string{
 			"run_id":          string(run.RunID),
