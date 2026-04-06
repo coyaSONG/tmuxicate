@@ -74,9 +74,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: Classify wait and block states into coordinator actions
-- [ ] 04-02: Implement human escalation payloads and retry ceilings
-- [ ] 04-03: Add unhappy-path tests for repeated failure and unresolved work
+- [ ] 04-01-PLAN.md — Define blocker-case contracts, blocker artifact storage, and dedicated blocker ceiling config
+- [ ] 04-02-PLAN.md — Implement deterministic wait/block policy and the `blocker resolve` operator command
+- [ ] 04-03-PLAN.md — Rebuild task-local blocker visibility in `run show` and reject blocker linkage drift
 
 ### Phase 5: Run Summaries
 **Goal**: Operator can see a trustworthy coordinator-run summary spanning completed, pending, blocked, review, and escalated work.
