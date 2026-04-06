@@ -192,6 +192,69 @@ func TestRunShowIncludesReviewHandoffBlock(t *testing.T) {
 	}
 }
 
+func TestRunShowIncludesTaskLocalBlockerBlock(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedReviewHandoffFixture(t)
+	blocker := createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+
+	graph, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Task: " + string(fixture.sourceTask.TaskID),
+		"Blocker: escalated",
+		"Current Owner: " + string(blocker.CurrentOwner),
+		"Next Action: " + string(blocker.SelectedAction),
+		"Reroutes: 1/2",
+		"Recommended Action: " + string(blocker.RecommendedAction.Kind),
+		"Reason: " + blocker.Reason,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+	if strings.Contains(output, "\nBlockers:\n") {
+		t.Fatalf("expected blocker visibility to stay task-local\noutput:\n%s", output)
+	}
+}
+
+func TestRunShowIncludesBlockerAndReviewBlocksTogether(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedPendingReviewFixture(t)
+	blocker := createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+
+	graph, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Task: " + string(fixture.sourceTask.TaskID),
+		"Review Handoff: pending",
+		"Review Task: " + string(fixture.handoff.ReviewTaskID),
+		"Blocker: escalated",
+		"Current Owner: " + string(blocker.CurrentOwner),
+		"Next Action: " + string(blocker.SelectedAction),
+		"Reroutes: 1/2",
+		"Recommended Action: " + string(blocker.RecommendedAction.Kind),
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+	if strings.Contains(output, "\nBlockers:\n") {
+		t.Fatalf("expected blocker visibility to stay task-local\noutput:\n%s", output)
+	}
+}
+
 func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 	t.Parallel()
 
@@ -240,6 +303,46 @@ func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
 		if err == nil {
 			t.Fatalf("expected message link mismatch to fail")
+		}
+		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
+			t.Fatalf("expected mismatch error, got %v", err)
+		}
+	})
+}
+
+func TestLoadRunGraphRejectsBrokenBlockerLinks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("source message mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		fixture := seedReviewHandoffFixture(t)
+		createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+		mutateBlockerCaseDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(caseDoc map[string]any) {
+			caseDoc["source_message_id"] = "msg_999999999999"
+		})
+
+		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+		if err == nil {
+			t.Fatalf("expected blocker source message mismatch to fail")
+		}
+		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
+			t.Fatalf("expected mismatch error, got %v", err)
+		}
+	})
+
+	t.Run("current owner mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		fixture := seedReviewHandoffFixture(t)
+		createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+		mutateBlockerCaseDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(caseDoc map[string]any) {
+			caseDoc["current_owner"] = "reviewer"
+		})
+
+		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+		if err == nil {
+			t.Fatalf("expected blocker current owner mismatch to fail")
 		}
 		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
 			t.Fatalf("expected mismatch error, got %v", err)
@@ -483,4 +586,85 @@ func seedRespondedReviewFixture(t *testing.T) pendingReviewFixture {
 	fixture.handoff = updated
 
 	return fixture
+}
+
+type escalatedBlockerOptions struct {
+	currentTask    *protocol.ChildTask
+	currentOwner   protocol.AgentName
+	currentMessage protocol.MessageID
+}
+
+func createEscalatedBlockerCase(t *testing.T, stateDir string, runID protocol.RunID, sourceTask *protocol.ChildTask, opts escalatedBlockerOptions) *protocol.BlockerCase {
+	t.Helper()
+
+	currentTaskID := sourceTask.TaskID
+	currentMessageID := sourceTask.MessageID
+	currentOwner := sourceTask.Owner
+	if opts.currentTask != nil {
+		currentTaskID = opts.currentTask.TaskID
+		currentMessageID = opts.currentTask.MessageID
+		currentOwner = opts.currentTask.Owner
+	}
+	if opts.currentMessage != "" {
+		currentMessageID = opts.currentMessage
+	}
+	if opts.currentOwner != "" {
+		currentOwner = opts.currentOwner
+	}
+
+	now := time.Date(2026, time.April, 6, 9, 30, 0, 0, time.UTC)
+	blocker := &protocol.BlockerCase{
+		RunID:            runID,
+		SourceTaskID:     sourceTask.TaskID,
+		SourceMessageID:  sourceTask.MessageID,
+		SourceOwner:      sourceTask.Owner,
+		CurrentTaskID:    currentTaskID,
+		CurrentMessageID: currentMessageID,
+		CurrentOwner:     currentOwner,
+		DeclaredState:    "block",
+		BlockKind:        protocol.BlockKindHumanDecision,
+		Reason:           "Need operator decision before proceeding",
+		SelectedAction:   protocol.BlockerActionEscalate,
+		Status:           protocol.BlockerStatusEscalated,
+		RerouteCount:     1,
+		MaxReroutes:      2,
+		RecommendedAction: &protocol.RecommendedAction{
+			Kind: protocol.BlockerResolutionActionClarify,
+			Note: "Clarify the missing product constraint",
+		},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		EscalatedAt: &now,
+	}
+
+	if err := mailbox.NewCoordinatorStore(stateDir).CreateBlockerCase(blocker); err != nil {
+		t.Fatalf("create blocker case: %v", err)
+	}
+
+	return blocker
+}
+
+func mutateBlockerCaseDocument(t *testing.T, stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID, mutate func(caseDoc map[string]any)) {
+	t.Helper()
+
+	path := mailbox.RunBlockerCasePath(stateDir, runID, sourceTaskID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read blocker case yaml: %v", err)
+	}
+
+	caseDoc := make(map[string]any)
+	if err := yaml.Unmarshal(data, &caseDoc); err != nil {
+		t.Fatalf("unmarshal blocker case yaml document: %v", err)
+	}
+
+	mutate(caseDoc)
+
+	updated, err := yaml.Marshal(caseDoc)
+	if err != nil {
+		t.Fatalf("marshal blocker case yaml document: %v", err)
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		t.Fatalf("write blocker case yaml: %v", err)
+	}
 }
