@@ -645,11 +645,11 @@ func assertFileExists(t *testing.T, path string) {
 }
 
 func callTaskWaitForPolicy(stateDir, agent string, msgID protocol.MessageID, waitKind protocol.WaitKind, reason string) error {
-	return TaskWait(stateDir, agent, msgID, string(waitKind), reason)
+	return TaskWait(stateDir, agent, msgID, waitKind, "", reason)
 }
 
 func callTaskBlockForPolicy(stateDir, agent string, msgID protocol.MessageID, blockKind protocol.BlockKind, reason string) error {
-	return TaskBlock(stateDir, agent, msgID, string(blockKind), reason)
+	return TaskBlock(stateDir, agent, msgID, blockKind, "", reason)
 }
 
 func makeConfigLoadable(cfg *config.ResolvedConfig) {

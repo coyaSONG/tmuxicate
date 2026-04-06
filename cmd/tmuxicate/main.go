@@ -117,7 +117,7 @@ func newSendCmd() *cobra.Command {
 	var configPath string
 	var stateDir string
 	var subject string
-	var kind string
+	var sendKind string
 
 	cmd := &cobra.Command{
 		Use:   "send <agent> <message>",
@@ -136,7 +136,7 @@ func newSendCmd() *cobra.Command {
 			body := strings.Join(args[1:], " ")
 			msgID, err := session.Send(stateDir, store, args[0], body, session.SendOpts{
 				Subject: subject,
-				Kind:    protocol.Kind(kind),
+				Kind:    protocol.Kind(sendKind),
 			})
 			if err != nil {
 				return err
@@ -150,7 +150,7 @@ func newSendCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
 	cmd.Flags().StringVar(&subject, "subject", "", "optional message subject")
-	cmd.Flags().StringVar(&kind, "kind", string(protocol.KindTask), "message kind")
+	cmd.Flags().StringVar(&sendKind, "kind", string(protocol.KindTask), "message kind")
 	return cmd
 }
 
@@ -701,6 +701,7 @@ func newTaskWaitCmd() *cobra.Command {
 	var configPath string
 	var stateDir string
 	var agent string
+	var kind string
 	var on string
 	var reason string
 
@@ -718,7 +719,12 @@ func newTaskWaitCmd() *cobra.Command {
 				return err
 			}
 
-			if err := session.TaskWait(resolvedStateDir, resolvedAgent, protocol.MessageID(args[0]), on, reason); err != nil {
+			waitKind := protocol.WaitKind(kind)
+			if err := waitKind.Validate(); err != nil {
+				return fmt.Errorf("invalid kind: %w", err)
+			}
+
+			if err := session.TaskWait(resolvedStateDir, resolvedAgent, protocol.MessageID(args[0]), waitKind, on, reason); err != nil {
 				return err
 			}
 			fmt.Println("waiting")
@@ -729,8 +735,10 @@ func newTaskWaitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
 	cmd.Flags().StringVar(&agent, "agent", "", "current agent name or alias")
+	cmd.Flags().StringVar(&kind, "kind", "", "wait kind: dependency_reply or external_event")
 	cmd.Flags().StringVar(&on, "on", "", "target agent or dependency being waited on")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for waiting")
+	_ = cmd.MarkFlagRequired("kind")
 	return cmd
 }
 
@@ -738,6 +746,7 @@ func newTaskBlockCmd() *cobra.Command {
 	var configPath string
 	var stateDir string
 	var agent string
+	var kind string
 	var on string
 	var reason string
 
@@ -755,7 +764,12 @@ func newTaskBlockCmd() *cobra.Command {
 				return err
 			}
 
-			if err := session.TaskBlock(resolvedStateDir, resolvedAgent, protocol.MessageID(args[0]), on, reason); err != nil {
+			blockKind := protocol.BlockKind(kind)
+			if err := blockKind.Validate(); err != nil {
+				return fmt.Errorf("invalid kind: %w", err)
+			}
+
+			if err := session.TaskBlock(resolvedStateDir, resolvedAgent, protocol.MessageID(args[0]), blockKind, on, reason); err != nil {
 				return err
 			}
 			fmt.Println("blocked")
@@ -766,8 +780,10 @@ func newTaskBlockCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
 	cmd.Flags().StringVar(&agent, "agent", "", "current agent name or alias")
+	cmd.Flags().StringVar(&kind, "kind", "", "block kind: agent_clarification, reroute_needed, human_decision, or unsupported")
 	cmd.Flags().StringVar(&on, "on", "human", "target agent or dependency causing the block")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason for the block")
+	_ = cmd.MarkFlagRequired("kind")
 	return cmd
 }
 
