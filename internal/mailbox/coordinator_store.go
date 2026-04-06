@@ -145,6 +145,42 @@ func (s *CoordinatorStore) ReadReviewHandoff(runID protocol.RunID, sourceTaskID 
 	return &handoff, nil
 }
 
+func (s *CoordinatorStore) FindReviewHandoffByReviewTaskID(runID protocol.RunID, reviewTaskID protocol.TaskID) (*protocol.ReviewHandoff, error) {
+	entries, err := os.ReadDir(RunReviewsDir(s.stateDir, runID))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("review handoff for review task %s: %w", reviewTaskID, os.ErrNotExist)
+		}
+		return nil, fmt.Errorf("read review handoffs: %w", err)
+	}
+
+	var matched *protocol.ReviewHandoff
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		handoff, err := s.ReadReviewHandoff(runID, sourceTaskID)
+		if err != nil {
+			return nil, err
+		}
+		if handoff.ReviewTaskID != reviewTaskID {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("multiple review handoffs found for review task %s", reviewTaskID)
+		}
+		matched = handoff
+	}
+
+	if matched == nil {
+		return nil, fmt.Errorf("review handoff for review task %s: %w", reviewTaskID, os.ErrNotExist)
+	}
+
+	return matched, nil
+}
+
 func (s *CoordinatorStore) UpdateReviewHandoff(runID protocol.RunID, sourceTaskID protocol.TaskID, updateFn func(*protocol.ReviewHandoff) error) error {
 	if updateFn == nil {
 		return errors.New("updateFn is required")
