@@ -17,6 +17,21 @@ const (
 	TaskClassReview         TaskClass = "review"
 )
 
+type ReviewOutcome string
+
+const (
+	ReviewOutcomeApproved         ReviewOutcome = "approved"
+	ReviewOutcomeChangesRequested ReviewOutcome = "changes_requested"
+)
+
+type ReviewHandoffStatus string
+
+const (
+	ReviewHandoffStatusPending       ReviewHandoffStatus = "pending"
+	ReviewHandoffStatusResponded     ReviewHandoffStatus = "responded"
+	ReviewHandoffStatusHandoffFailed ReviewHandoffStatus = "handoff_failed"
+)
+
 type AgentSnapshot struct {
 	Name      AgentName `yaml:"name"`
 	Alias     string    `yaml:"alias"`
@@ -59,6 +74,21 @@ type ChildTask struct {
 	MessageID      MessageID `yaml:"message_id,omitempty"`
 	ThreadID       ThreadID  `yaml:"thread_id,omitempty"`
 	CreatedAt      time.Time `yaml:"created_at"`
+}
+
+type ReviewHandoff struct {
+	RunID             RunID               `yaml:"run_id"`
+	SourceTaskID      TaskID              `yaml:"source_task_id"`
+	SourceMessageID   MessageID           `yaml:"source_message_id"`
+	ReviewTaskID      TaskID              `yaml:"review_task_id,omitempty"`
+	ReviewMessageID   MessageID           `yaml:"review_message_id,omitempty"`
+	Reviewer          AgentName           `yaml:"reviewer,omitempty"`
+	Status            ReviewHandoffStatus `yaml:"status"`
+	FailureSummary    string              `yaml:"failure_summary,omitempty"`
+	ResponseMessageID MessageID           `yaml:"response_message_id,omitempty"`
+	Outcome           ReviewOutcome       `yaml:"outcome,omitempty"`
+	CreatedAt         time.Time           `yaml:"created_at"`
+	RespondedAt       *time.Time          `yaml:"responded_at,omitempty"`
 }
 
 type RouteChildTaskRequest struct {

@@ -16,6 +16,7 @@ const (
 	runsDirName        = "runs"
 	runFileName        = "run.yaml"
 	tasksDirName       = "tasks"
+	reviewsDirName     = "reviews"
 )
 
 func SessionDir(stateDir string) string {
@@ -116,6 +117,14 @@ func RunTasksDir(stateDir string, runID protocol.RunID) string {
 
 func RunTaskPath(stateDir string, runID protocol.RunID, taskID protocol.TaskID) string {
 	return filepath.Join(RunTasksDir(stateDir, runID), fmt.Sprintf("%s.yaml", taskID))
+}
+
+func RunReviewsDir(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunDir(stateDir, runID), reviewsDirName)
+}
+
+func RunReviewHandoffPath(stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID) string {
+	return filepath.Join(RunReviewsDir(stateDir, runID), fmt.Sprintf("%s.yaml", sourceTaskID))
 }
 
 func RunLocksDir(stateDir string, runID protocol.RunID) string {

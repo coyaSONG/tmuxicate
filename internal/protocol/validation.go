@@ -289,12 +289,98 @@ func (t *ChildTask) Validate() error {
 	return nil
 }
 
+func (h *ReviewHandoff) Validate() error {
+	if h == nil {
+		return errors.New("review handoff is required")
+	}
+	if !isGeneratedRunID(h.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if !isGeneratedTaskID(h.SourceTaskID) {
+		return errors.New("source_task_id must use generated task_ identifier")
+	}
+	if strings.TrimSpace(string(h.SourceMessageID)) == "" {
+		return errors.New("source_message_id is required")
+	}
+	if err := h.Status.Validate(); err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if h.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+	if h.RespondedAt != nil && h.RespondedAt.IsZero() {
+		return errors.New("responded_at must not be zero")
+	}
+	if h.ReviewTaskID != "" && !isGeneratedTaskID(h.ReviewTaskID) {
+		return errors.New("review_task_id must use generated task_ identifier")
+	}
+	if h.Reviewer != "" && strings.TrimSpace(string(h.Reviewer)) == "" {
+		return errors.New("reviewer must not be blank")
+	}
+
+	switch h.Status {
+	case ReviewHandoffStatusPending:
+		if !isGeneratedTaskID(h.ReviewTaskID) {
+			return errors.New("pending handoff requires review_task_id")
+		}
+		if strings.TrimSpace(string(h.ReviewMessageID)) == "" {
+			return errors.New("pending handoff requires review_message_id")
+		}
+		if strings.TrimSpace(string(h.Reviewer)) == "" {
+			return errors.New("pending handoff requires reviewer")
+		}
+	case ReviewHandoffStatusResponded:
+		if !isGeneratedTaskID(h.ReviewTaskID) {
+			return errors.New("responded handoff requires review_task_id")
+		}
+		if strings.TrimSpace(string(h.ReviewMessageID)) == "" {
+			return errors.New("responded handoff requires review_message_id")
+		}
+		if strings.TrimSpace(string(h.Reviewer)) == "" {
+			return errors.New("responded handoff requires reviewer")
+		}
+		if strings.TrimSpace(string(h.ResponseMessageID)) == "" {
+			return errors.New("responded handoff requires response_message_id")
+		}
+		if err := h.Outcome.Validate(); err != nil {
+			return fmt.Errorf("outcome: %w", err)
+		}
+		if h.RespondedAt == nil {
+			return errors.New("responded handoff requires responded_at")
+		}
+	case ReviewHandoffStatusHandoffFailed:
+		if strings.TrimSpace(h.FailureSummary) == "" {
+			return errors.New("handoff_failed requires failure_summary")
+		}
+	}
+
+	return nil
+}
+
 func (c TaskClass) Validate() error {
 	switch c {
 	case TaskClassImplementation, TaskClassResearch, TaskClassReview:
 		return nil
 	default:
 		return fmt.Errorf("must be one of %q, %q, or %q", TaskClassImplementation, TaskClassResearch, TaskClassReview)
+	}
+}
+
+func (o ReviewOutcome) Validate() error {
+	switch o {
+	case ReviewOutcomeApproved, ReviewOutcomeChangesRequested:
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q or %q", ReviewOutcomeApproved, ReviewOutcomeChangesRequested)
+	}
+}
+
+func (s ReviewHandoffStatus) Validate() error {
+	switch s {
+	case ReviewHandoffStatusPending, ReviewHandoffStatusResponded, ReviewHandoffStatusHandoffFailed:
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q, %q, or %q", ReviewHandoffStatusPending, ReviewHandoffStatusResponded, ReviewHandoffStatusHandoffFailed)
 	}
 }
 
