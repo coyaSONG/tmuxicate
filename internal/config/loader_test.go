@@ -235,6 +235,138 @@ func TestResolvePathResolution(t *testing.T) {
 	}
 }
 
+func TestLoadValidConfigWithBlockerRerouteCeilings(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "tmuxicate.yaml")
+	writeTestFile(t, cfgPath, `
+version: 1
+session:
+  name: blocker-dev
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+routing:
+  coordinator: coordinator
+blockers:
+  max_reroutes_default: 1
+  max_reroutes_by_task_class:
+    implementation: 1
+    research: 1
+    review: 0
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+      description: Coordinates routing work
+    pane:
+      slot: main
+`)
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+
+	if cfg.Blockers.MaxReroutesDefault != 1 {
+		t.Fatalf("Blockers.MaxReroutesDefault = %d, want 1", cfg.Blockers.MaxReroutesDefault)
+	}
+	if got := cfg.Blockers.MaxReroutesByTaskClass[protocol.TaskClassImplementation]; got != 1 {
+		t.Fatalf("implementation reroute ceiling = %d, want 1", got)
+	}
+	if got := cfg.Blockers.MaxReroutesByTaskClass[protocol.TaskClassResearch]; got != 1 {
+		t.Fatalf("research reroute ceiling = %d, want 1", got)
+	}
+	if got := cfg.Blockers.MaxReroutesByTaskClass[protocol.TaskClassReview]; got != 0 {
+		t.Fatalf("review reroute ceiling = %d, want 0", got)
+	}
+}
+
+func TestLoadRejectsInvalidBlockerRerouteCeilings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		blockersYML string
+		wantSubstr  string
+	}{
+		{
+			name: "invalid task class key",
+			blockersYML: `
+blockers:
+  max_reroutes_default: 1
+  max_reroutes_by_task_class:
+    invalid: 1
+`,
+			wantSubstr: "blockers.max_reroutes_by_task_class",
+		},
+		{
+			name: "negative default",
+			blockersYML: `
+blockers:
+  max_reroutes_default: -1
+`,
+			wantSubstr: "blockers.max_reroutes_default",
+		},
+		{
+			name: "negative override",
+			blockersYML: `
+blockers:
+  max_reroutes_default: 1
+  max_reroutes_by_task_class:
+    review: -1
+`,
+			wantSubstr: "blockers.max_reroutes_by_task_class",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpDir := t.TempDir()
+			cfgPath := filepath.Join(tmpDir, "tmuxicate.yaml")
+			writeTestFile(t, cfgPath, `
+version: 1
+session:
+  name: blocker-dev
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+routing:
+  coordinator: coordinator
+`+tt.blockersYML+`
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+      description: Coordinates routing work
+    pane:
+      slot: main
+`)
+
+			_, err := Load(cfgPath)
+			if err == nil {
+				t.Fatal("Load() expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "blockers.") {
+				t.Fatalf("Load() error = %q, want blockers.* failure", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantSubstr) {
+				t.Fatalf("Load() error = %q, want substring %q", err, tt.wantSubstr)
+			}
+		})
+	}
+}
+
 func writeTestFile(t *testing.T, path, contents string) {
 	t.Helper()
 
