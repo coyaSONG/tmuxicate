@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 		newUpCmd(),
 		newDownCmd(),
 		newRunCmd(),
+		newReviewCmd(),
 		newSendCmd(),
 		newInboxCmd(),
 		newReadCmd(),
@@ -347,6 +348,71 @@ func newTaskCmd() *cobra.Command {
 	)
 
 	return taskCmd
+}
+
+func newReviewCmd() *cobra.Command {
+	reviewCmd := &cobra.Command{
+		Use:   "review",
+		Short: "Manage review workflows",
+		Run:   stubRun,
+	}
+
+	reviewCmd.AddCommand(newReviewRespondCmd())
+
+	return reviewCmd
+}
+
+func newReviewRespondCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+	var agent string
+	var outcome string
+	var bodyFile string
+	var useStdin bool
+
+	cmd := &cobra.Command{
+		Use:   "respond <review-message-id>",
+		Short: "Respond to a review request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+			resolvedAgent, err := resolveAgent(agent)
+			if err != nil {
+				return err
+			}
+			reviewOutcome := protocol.ReviewOutcome(outcome)
+			if err := reviewOutcome.Validate(); err != nil {
+				return fmt.Errorf("invalid outcome: %w", err)
+			}
+
+			body, err := readReplyBody(bodyFile, useStdin)
+			if err != nil {
+				return err
+			}
+
+			store := mailbox.NewStore(resolvedStateDir)
+			msgID, err := session.ReviewRespond(resolvedStateDir, store, resolvedAgent, protocol.MessageID(args[0]), reviewOutcome, body)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(msgID)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	cmd.Flags().StringVar(&agent, "agent", "", "current agent name or alias")
+	cmd.Flags().StringVar(&outcome, "outcome", "", "review outcome: approved or changes_requested")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "path to review response body file")
+	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read review response body from stdin")
+	_ = cmd.MarkFlagRequired("outcome")
+
+	return cmd
 }
 
 func newInboxCmd() *cobra.Command {
