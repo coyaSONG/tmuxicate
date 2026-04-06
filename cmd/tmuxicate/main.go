@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 		newUpCmd(),
 		newDownCmd(),
 		newRunCmd(),
+		newBlockerCmd(),
 		newReviewCmd(),
 		newSendCmd(),
 		newInboxCmd(),
@@ -350,6 +351,18 @@ func newTaskCmd() *cobra.Command {
 	return taskCmd
 }
 
+func newBlockerCmd() *cobra.Command {
+	blockerCmd := &cobra.Command{
+		Use:   "blocker",
+		Short: "Manage blocker workflows",
+		Run:   stubRun,
+	}
+
+	blockerCmd.AddCommand(newBlockerResolveCmd())
+
+	return blockerCmd
+}
+
 func newReviewCmd() *cobra.Command {
 	reviewCmd := &cobra.Command{
 		Use:   "review",
@@ -360,6 +373,66 @@ func newReviewCmd() *cobra.Command {
 	reviewCmd.AddCommand(newReviewRespondCmd())
 
 	return reviewCmd
+}
+
+func newBlockerResolveCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+	var action string
+	var owner string
+	var reason string
+	var bodyFile string
+	var useStdin bool
+
+	cmd := &cobra.Command{
+		Use:   "resolve <run-id> <source-task-id>",
+		Short: "Resolve an escalated blocker case",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
+			if err != nil {
+				return err
+			}
+
+			resolutionAction := protocol.BlockerResolutionAction(action)
+			if err := resolutionAction.Validate(); err != nil {
+				return fmt.Errorf("invalid action: %w", err)
+			}
+
+			body, err := readOptionalReplyBody(bodyFile, useStdin)
+			if err != nil {
+				return err
+			}
+
+			store := mailbox.NewStore(resolvedStateDir)
+			if err := session.BlockerResolve(
+				resolvedStateDir,
+				store,
+				protocol.RunID(args[0]),
+				protocol.TaskID(args[1]),
+				resolutionAction,
+				owner,
+				reason,
+				body,
+			); err != nil {
+				return err
+			}
+
+			fmt.Println("resolved")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+	cmd.Flags().StringVar(&action, "action", "", "blocker resolution action: manual_reroute, clarify, or dismiss")
+	cmd.Flags().StringVar(&owner, "owner", "", "override reroute owner for manual_reroute")
+	cmd.Flags().StringVar(&reason, "reason", "", "operator resolution reason")
+	cmd.Flags().StringVar(&bodyFile, "body-file", "", "path to clarification body file")
+	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read clarification body from stdin")
+	_ = cmd.MarkFlagRequired("action")
+
+	return cmd
 }
 
 func newReviewRespondCmd() *cobra.Command {
@@ -1003,6 +1076,16 @@ func readReplyBody(bodyFile string, useStdin bool) ([]byte, error) {
 	}
 
 	return nil, errors.New("reply body required via --body-file or stdin")
+}
+
+func readOptionalReplyBody(bodyFile string, useStdin bool) ([]byte, error) {
+	if strings.TrimSpace(bodyFile) == "" && !useStdin {
+		if info, err := os.Stdin.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
+			return nil, nil
+		}
+	}
+
+	return readReplyBody(bodyFile, useStdin)
 }
 
 func printReadResult(result *session.ReadResult) {
