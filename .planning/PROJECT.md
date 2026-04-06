@@ -20,10 +20,10 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 - ✓ The system works across multiple agent CLIs through a generic adapter boundary plus Codex and Claude adapters — existing
 - ✓ Coordinator can turn a high-level human goal into a bounded set of child tasks with clear ownership and expected outputs — validated in Phase 1: Coordinator Foundations
 - ✓ Coordinator can route implementation, research, and review tasks to the right agents using declared roles and team relationships — validated in Phase 2: Role-Based Routing
+- ✓ Coordinator can manage a review handoff so completed implementation work reaches a reviewer and the resulting feedback stays linked to the coordinator run — validated in Phase 3: Review Handoff Flow
 
 ### Active
 
-- [ ] Coordinator can manage a review handoff so completed implementation work reaches a reviewer and the resulting feedback returns to the active thread
 - [ ] Coordinator can react to `wait` and `block` states by requesting clarification, re-routing work, or escalating to the human operator
 - [ ] Coordinator can produce an end-of-run summary that explains what was completed, what is waiting, what is blocked, and what still needs human attention
 
@@ -36,7 +36,7 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ## Context
 
-The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The current product now proves the core mailbox and pane workflow, durable coordinator runs, and deterministic role-based routing with duplicate-safe task assignment. The remaining milestone work is review handoff, blocker escalation, and operator-facing run summaries, all on top of the same mailbox/tmux substrate rather than a replacement orchestration system.
+The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The current product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, and a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts. The remaining milestone work is blocker escalation and operator-facing run summaries, all on top of the same mailbox/tmux substrate rather than a replacement orchestration system.
 
 ## Constraints
 
@@ -55,6 +55,8 @@ The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmux
 | Focus the next milestone on coordinator-managed decomposition, routing, review, blocker handling, and summary generation | This is the smallest automation slice that materially improves collaboration without overreaching into full autonomy | — Pending |
 | Exclude fully autonomous long-horizon behavior from v1 automation | Human-steerable reliability is a clearer fit than "autonomous swarm" behavior | ✓ Good |
 | Route coordinator work through structured `RoleSpec` metadata plus deterministic `route-task` selection | Role/domain routing must stay inspectable, teammate-constrained, and vendor-independent | ✓ Good |
+| Keep review linkage in a dedicated `ReviewHandoff` artifact keyed by source task ID | Review state must stay durable, explicit, and idempotent without mutating child-task contracts | ✓ Good |
+| Record reviewer outcomes through `tmuxicate review respond` and surface them in `run show` | Review decisions should stay visible through existing operator workflows instead of transcript-only context | ✓ Good |
 
 ## Evolution
 
@@ -74,4 +76,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after Phase 2 completion*
+*Last updated: 2026-04-06 after Phase 3 completion*
