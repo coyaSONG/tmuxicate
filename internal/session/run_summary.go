@@ -1,6 +1,11 @@
 package session
 
-import "github.com/coyaSONG/tmuxicate/internal/protocol"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/coyaSONG/tmuxicate/internal/protocol"
+)
 
 type RunSummaryStatus string
 
@@ -43,6 +48,16 @@ type RunSummaryItem struct {
 	BlockerRecommendedAction *protocol.RecommendedAction
 }
 
+const runSummarySectionLabels = `
+Summary:
+Escalated (
+Blocked (
+Waiting (
+Under Review (
+Pending (
+Completed (
+`
+
 func BuildRunSummary(graph *RunGraph) *RunSummary {
 	if graph == nil {
 		return nil
@@ -82,7 +97,40 @@ func FormatRunSummary(summary *RunSummary) string {
 		return ""
 	}
 
-	return "Summary:\n"
+	var builder strings.Builder
+	builder.WriteString("Summary:\n")
+
+	statusOrder := []RunSummaryStatus{
+		RunSummaryStatusEscalated,
+		RunSummaryStatusBlocked,
+		RunSummaryStatusWaiting,
+		RunSummaryStatusUnderReview,
+		RunSummaryStatusPending,
+		RunSummaryStatusCompleted,
+	}
+
+	for _, status := range statusOrder {
+		items := summaryItemsForStatus(summary.Items, status)
+		if len(items) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(&builder, "%s (%d)\n", summaryBucketTitle(status), len(items))
+		for _, item := range items {
+			fmt.Fprintf(&builder, "- %s | owner=%s | %s | %s\n",
+				item.Status,
+				formatSummaryOwner(item),
+				normalizeDisplayValue(item.SourceGoal),
+				formatSummaryRefs(item),
+			)
+
+			if detail := formatSummaryOptionalDetail(item); detail != "" {
+				fmt.Fprintf(&builder, "  %s\n", detail)
+			}
+		}
+	}
+
+	return builder.String()
 }
 
 func buildRunSummaryItem(sourceTask *RunGraphTask, taskByID map[protocol.TaskID]*RunGraphTask) RunSummaryItem {
@@ -168,4 +216,87 @@ func deriveRunSummaryStatus(sourceTask *RunGraphTask, effectiveTask *RunGraphTas
 	}
 
 	return RunSummaryStatusPending
+}
+
+func summaryItemsForStatus(items []RunSummaryItem, status RunSummaryStatus) []RunSummaryItem {
+	filtered := make([]RunSummaryItem, 0, len(items))
+	for _, item := range items {
+		if item.Status == status {
+			filtered = append(filtered, item)
+		}
+	}
+
+	return filtered
+}
+
+func summaryBucketTitle(status RunSummaryStatus) string {
+	switch status {
+	case RunSummaryStatusEscalated:
+		return "Escalated"
+	case RunSummaryStatusBlocked:
+		return "Blocked"
+	case RunSummaryStatusWaiting:
+		return "Waiting"
+	case RunSummaryStatusUnderReview:
+		return "Under Review"
+	case RunSummaryStatusPending:
+		return "Pending"
+	case RunSummaryStatusCompleted:
+		return "Completed"
+	default:
+		return strings.ReplaceAll(string(status), "_", " ")
+	}
+}
+
+func formatSummaryOwner(item RunSummaryItem) string {
+	switch {
+	case item.Owner != "":
+		return string(item.Owner)
+	case item.CurrentOwner != "":
+		return string(item.CurrentOwner)
+	case item.SourceOwner != "":
+		return string(item.SourceOwner)
+	default:
+		return "-"
+	}
+}
+
+func formatSummaryRefs(item RunSummaryItem) string {
+	refs := []string{
+		fmt.Sprintf("task=%s", displayTaskID(item.SourceTaskID)),
+		fmt.Sprintf("msg=%s", displayMessageID(item.SourceMessageID)),
+	}
+	// current task refs stay on the main line.
+	if item.CurrentTaskID != "" && (item.CurrentTaskID != item.SourceTaskID || item.CurrentMessageID != item.SourceMessageID) {
+		refs = append(refs, fmt.Sprintf("current=%s/%s", displayTaskID(item.CurrentTaskID), displayMessageID(item.CurrentMessageID)))
+	}
+	if item.ReviewTaskID != "" || item.ReviewMessageID != "" {
+		refs = append(refs, fmt.Sprintf("review=%s/%s", displayTaskID(item.ReviewTaskID), displayMessageID(item.ReviewMessageID)))
+	}
+	if item.ResponseMessageID != "" {
+		refs = append(refs, fmt.Sprintf("response=%s", displayMessageID(item.ResponseMessageID)))
+	}
+
+	return strings.Join(refs, " ")
+}
+
+func formatSummaryOptionalDetail(item RunSummaryItem) string {
+	parts := make([]string, 0, 4)
+	if item.ReviewOutcome != "" {
+		parts = append(parts, fmt.Sprintf("review outcome=%s", item.ReviewOutcome))
+	}
+	if strings.TrimSpace(item.ReviewFailureSummary) != "" {
+		parts = append(parts, fmt.Sprintf("failure=%s", item.ReviewFailureSummary))
+	}
+	if item.BlockerNextAction != "" {
+		parts = append(parts, fmt.Sprintf("next action=%s", item.BlockerNextAction))
+	}
+	if item.BlockerRecommendedAction != nil {
+		parts = append(parts, fmt.Sprintf("recommended action=%s", formatRecommendedAction(item.BlockerRecommendedAction)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, " | ")
 }
