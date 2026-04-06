@@ -281,6 +281,15 @@ func TestBuildRunSummaryCollapsesReviewAndRerouteArtifactsIntoSourceRows(t *test
 	if err != nil {
 		t.Fatalf("read rerouted review handoff: %v", err)
 	}
+	mutateBlockerCaseDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(caseDoc map[string]any) {
+		caseDoc["status"] = string(protocol.BlockerStatusResolved)
+		caseDoc["updated_at"] = "2026-04-06T10:00:00Z"
+		caseDoc["resolved_at"] = "2026-04-06T10:00:00Z"
+		caseDoc["resolution"] = map[string]any{
+			"action":     string(protocol.BlockerResolutionActionManualReroute),
+			"created_at": "2026-04-06T10:00:00Z",
+		}
+	})
 
 	graph := mustLoadRunGraph(t, fixture.cfg.Session.StateDir, fixture.run.RunID)
 	summary := BuildRunSummary(graph)
