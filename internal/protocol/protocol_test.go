@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -150,4 +151,117 @@ func TestReceiptValidateStateTransitions(t *testing.T) {
 	if err := done.Validate(); err != nil {
 		t.Fatalf("done receipt should validate: %v", err)
 	}
+}
+
+func TestBlockerCaseValidateRequiresStructuredKinds(t *testing.T) {
+	t.Parallel()
+
+	t.Run("wait requires wait kind", func(t *testing.T) {
+		t.Parallel()
+
+		blocker := validBlockerCase()
+		blocker.DeclaredState = "wait"
+		blocker.WaitKind = ""
+		blocker.BlockKind = ""
+
+		err := blocker.Validate()
+		if err == nil {
+			t.Fatal("BlockerCase.Validate() expected error, got nil")
+		}
+		if got := err.Error(); got == "" || !containsAll(got, "wait_kind") {
+			t.Fatalf("BlockerCase.Validate() error = %q, want wait_kind requirement", got)
+		}
+	})
+
+	t.Run("block requires block kind and forbids wait kind", func(t *testing.T) {
+		t.Parallel()
+
+		blocker := validBlockerCase()
+		blocker.DeclaredState = "block"
+		blocker.BlockKind = ""
+		blocker.WaitKind = WaitKindDependencyReply
+
+		err := blocker.Validate()
+		if err == nil {
+			t.Fatal("BlockerCase.Validate() expected error, got nil")
+		}
+		if got := err.Error(); got == "" || (!containsAll(got, "block_kind") && !containsAll(got, "wait_kind")) {
+			t.Fatalf("BlockerCase.Validate() error = %q, want structured kind failure", got)
+		}
+	})
+}
+
+func TestBlockerCaseValidateRequiresRecommendedActionForEscalation(t *testing.T) {
+	t.Parallel()
+
+	blocker := validBlockerCase()
+	blocker.Status = BlockerStatusEscalated
+	blocker.RecommendedAction = nil
+
+	err := blocker.Validate()
+	if err == nil {
+		t.Fatal("BlockerCase.Validate() expected error, got nil")
+	}
+	if got := err.Error(); got == "" || !containsAll(got, "recommended_action") {
+		t.Fatalf("BlockerCase.Validate() error = %q, want recommended_action failure", got)
+	}
+}
+
+func TestBlockerResolutionActionValidate(t *testing.T) {
+	t.Parallel()
+
+	valid := []BlockerResolutionAction{
+		BlockerResolutionActionManualReroute,
+		BlockerResolutionActionClarify,
+		BlockerResolutionActionDismiss,
+	}
+
+	for _, action := range valid {
+		action := action
+		t.Run(string(action), func(t *testing.T) {
+			t.Parallel()
+
+			if err := action.Validate(); err != nil {
+				t.Fatalf("BlockerResolutionAction.Validate() unexpected error: %v", err)
+			}
+		})
+	}
+
+	invalid := BlockerResolutionAction("other")
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("BlockerResolutionAction.Validate() expected error, got nil")
+	}
+}
+
+func validBlockerCase() *BlockerCase {
+	now := time.Now().UTC()
+
+	return &BlockerCase{
+		RunID:           NewRunID(1),
+		SourceTaskID:    NewTaskID(1),
+		SourceMessageID: NewMessageID(1),
+		SourceOwner:     AgentName("coordinator"),
+		CurrentTaskID:   NewTaskID(2),
+		CurrentMessageID: NewMessageID(2),
+		CurrentOwner:    AgentName("backend"),
+		DeclaredState:   "block",
+		BlockKind:       BlockKindRerouteNeeded,
+		Reason:          "needs explicit next step",
+		SelectedAction:  BlockerActionReroute,
+		Status:          BlockerStatusActive,
+		RerouteCount:    0,
+		MaxReroutes:     1,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+}
+
+func containsAll(got string, wantParts ...string) bool {
+	for _, part := range wantParts {
+		if !strings.Contains(got, part) {
+			return false
+		}
+	}
+
+	return true
 }
