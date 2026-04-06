@@ -21,10 +21,13 @@ type RunGraphTask struct {
 	Task          protocol.ChildTask
 	ReceiptState  protocol.FolderState
 	DeclaredState string
+	ReviewHandoff *protocol.ReviewHandoff
 }
 
 type runMessageSummary struct {
-	Thread protocol.ThreadID
+	Thread  protocol.ThreadID
+	Kind    protocol.Kind
+	ReplyTo *protocol.MessageID
 }
 
 func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
@@ -56,7 +59,7 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		Run:   *run,
 		Tasks: make([]RunGraphTask, 0, len(tasks)),
 	}
-	taskByID := make(map[protocol.TaskID]RunGraphTask, len(tasks))
+	taskByID := make(map[protocol.TaskID]*RunGraphTask, len(tasks))
 	for _, task := range tasks {
 		if task.ParentRunID != run.RunID {
 			return nil, coordinatorArtifactMismatch("task %s belongs to run %s, not %s", task.TaskID, task.ParentRunID, run.RunID)
@@ -89,7 +92,7 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 			DeclaredState: declaredState,
 		}
 		graph.Tasks = append(graph.Tasks, node)
-		taskByID[task.TaskID] = node
+		taskByID[task.TaskID] = &graph.Tasks[len(graph.Tasks)-1]
 	}
 
 	for _, node := range graph.Tasks {
@@ -98,6 +101,59 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 				return nil, coordinatorArtifactMismatch("task %s depends on missing task %s", node.Task.TaskID, dependency)
 			}
 		}
+	}
+
+	handoffs, err := loadRunReviewHandoffs(stateDir, run.RunID)
+	if err != nil {
+		return nil, err
+	}
+	for _, handoff := range handoffs {
+		if handoff.RunID != run.RunID {
+			return nil, coordinatorArtifactMismatch("review handoff %s belongs to run %s, not %s", handoff.SourceTaskID, handoff.RunID, run.RunID)
+		}
+
+		sourceTask, ok := taskByID[handoff.SourceTaskID]
+		if !ok {
+			return nil, coordinatorArtifactMismatch("review handoff references missing source task %s", handoff.SourceTaskID)
+		}
+		if sourceTask.Task.MessageID != handoff.SourceMessageID {
+			return nil, coordinatorArtifactMismatch("review handoff source message mismatch for task %s", handoff.SourceTaskID)
+		}
+
+		switch handoff.Status {
+		case protocol.ReviewHandoffStatusPending, protocol.ReviewHandoffStatusResponded:
+			reviewTask, ok := taskByID[handoff.ReviewTaskID]
+			if !ok {
+				return nil, coordinatorArtifactMismatch("review handoff references missing review task %s", handoff.ReviewTaskID)
+			}
+			if reviewTask.Task.MessageID != handoff.ReviewMessageID {
+				return nil, coordinatorArtifactMismatch("review handoff review message mismatch for task %s", handoff.ReviewTaskID)
+			}
+			if reviewTask.Task.Owner != handoff.Reviewer {
+				return nil, coordinatorArtifactMismatch("review handoff reviewer mismatch for task %s", handoff.ReviewTaskID)
+			}
+			if reviewTask.Task.TaskClass != protocol.TaskClassReview {
+				return nil, coordinatorArtifactMismatch("review handoff review task %s is not a review task", handoff.ReviewTaskID)
+			}
+		}
+
+		if handoff.Status == protocol.ReviewHandoffStatusResponded {
+			responseMessage, ok := messages[handoff.ResponseMessageID]
+			if !ok {
+				return nil, coordinatorArtifactMismatch("review handoff response message %s is missing", handoff.ResponseMessageID)
+			}
+			if responseMessage.Kind != protocol.KindReviewResponse {
+				return nil, coordinatorArtifactMismatch("review handoff response %s is not a review_response", handoff.ResponseMessageID)
+			}
+			if responseMessage.ReplyTo == nil || *responseMessage.ReplyTo != handoff.ReviewMessageID {
+				return nil, coordinatorArtifactMismatch("review handoff response %s does not reply to %s", handoff.ResponseMessageID, handoff.ReviewMessageID)
+			}
+			if responseMessage.Thread != run.RootThreadID {
+				return nil, coordinatorArtifactMismatch("review handoff response %s thread mismatch", handoff.ResponseMessageID)
+			}
+		}
+
+		sourceTask.ReviewHandoff = handoff
 	}
 
 	sort.Slice(graph.Tasks, func(i, j int) bool {
@@ -143,6 +199,14 @@ func FormatRunGraph(graph *RunGraph) string {
 		fmt.Fprintf(&builder, "Depends On: %s\n", formatDependsOn(task.Task.DependsOn))
 		fmt.Fprintf(&builder, "State: %s [%s]\n", normalizeDisplayValue(task.DeclaredState), normalizeDisplayValue(string(task.ReceiptState)))
 		fmt.Fprintf(&builder, "Message: %s\n", task.Task.MessageID)
+		if task.ReviewHandoff != nil {
+			fmt.Fprintf(&builder, "Review Handoff: %s\n", task.ReviewHandoff.Status)
+			fmt.Fprintf(&builder, "Review Task: %s\n", displayTaskID(task.ReviewHandoff.ReviewTaskID))
+			fmt.Fprintf(&builder, "Reviewer: %s\n", normalizeDisplayValue(string(task.ReviewHandoff.Reviewer)))
+			fmt.Fprintf(&builder, "Response: %s\n", displayMessageID(task.ReviewHandoff.ResponseMessageID))
+			fmt.Fprintf(&builder, "Outcome: %s\n", normalizeDisplayValue(string(task.ReviewHandoff.Outcome)))
+			fmt.Fprintf(&builder, "Failure: %s\n", normalizeDisplayValue(task.ReviewHandoff.FailureSummary))
+		}
 	}
 
 	return builder.String()
@@ -157,8 +221,10 @@ func loadRunMessages(stateDir string) (map[protocol.MessageID]runMessageSummary,
 		}
 
 		var envelope struct {
-			ID     protocol.MessageID `yaml:"id"`
-			Thread protocol.ThreadID  `yaml:"thread"`
+			ID      protocol.MessageID  `yaml:"id"`
+			Thread  protocol.ThreadID   `yaml:"thread"`
+			Kind    protocol.Kind       `yaml:"kind"`
+			ReplyTo *protocol.MessageID `yaml:"reply_to"`
 		}
 		if err := yaml.Unmarshal(data, &envelope); err != nil {
 			return err
@@ -167,7 +233,11 @@ func loadRunMessages(stateDir string) (map[protocol.MessageID]runMessageSummary,
 			return nil
 		}
 
-		messages[envelope.ID] = runMessageSummary{Thread: envelope.Thread}
+		messages[envelope.ID] = runMessageSummary{
+			Thread:  envelope.Thread,
+			Kind:    envelope.Kind,
+			ReplyTo: envelope.ReplyTo,
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -234,6 +304,33 @@ func loadTaskReceiptState(stateDir, agent string, msgID protocol.MessageID) (pro
 	return state, nil
 }
 
+func loadRunReviewHandoffs(stateDir string, runID protocol.RunID) (map[protocol.TaskID]*protocol.ReviewHandoff, error) {
+	entries, err := os.ReadDir(mailbox.RunReviewsDir(stateDir, runID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[protocol.TaskID]*protocol.ReviewHandoff{}, nil
+		}
+		return nil, fmt.Errorf("read run reviews dir: %w", err)
+	}
+
+	handoffs := make(map[protocol.TaskID]*protocol.ReviewHandoff, len(entries))
+	coordinatorStore := mailbox.NewCoordinatorStore(stateDir)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		handoff, err := coordinatorStore.ReadReviewHandoff(runID, sourceTaskID)
+		if err != nil {
+			return nil, err
+		}
+		handoffs[sourceTaskID] = handoff
+	}
+
+	return handoffs, nil
+}
+
 func coordinatorArtifactMismatch(format string, args ...any) error {
 	return fmt.Errorf("coordinator artifact mismatch: "+format, args...)
 }
@@ -293,4 +390,20 @@ func formatRoutingCandidates(candidates []protocol.AgentName) string {
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+func displayTaskID(taskID protocol.TaskID) string {
+	if taskID == "" {
+		return "-"
+	}
+
+	return string(taskID)
+}
+
+func displayMessageID(messageID protocol.MessageID) string {
+	if messageID == "" {
+		return "-"
+	}
+
+	return string(messageID)
 }

@@ -164,6 +164,34 @@ func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
 	}
 }
 
+func TestRunShowIncludesReviewHandoffBlock(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedRespondedReviewFixture(t)
+
+	graph, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Task: " + string(fixture.sourceTask.TaskID),
+		"Review Handoff: responded",
+		"Review Task: " + string(fixture.handoff.ReviewTaskID),
+		"Reviewer: " + string(fixture.handoff.Reviewer),
+		"Response: " + string(fixture.handoff.ResponseMessageID),
+		"Outcome: approved",
+		"Failure: -",
+		"Task: " + string(fixture.handoff.ReviewTaskID),
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 	t.Parallel()
 
@@ -212,6 +240,44 @@ func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
 		if err == nil {
 			t.Fatalf("expected message link mismatch to fail")
+		}
+		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
+			t.Fatalf("expected mismatch error, got %v", err)
+		}
+	})
+}
+
+func TestLoadRunGraphRejectsBrokenReviewHandoffLinks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing response message", func(t *testing.T) {
+		t.Parallel()
+
+		fixture := seedRespondedReviewFixture(t)
+		mutateReviewHandoffDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(handoffDoc map[string]any) {
+			handoffDoc["response_message_id"] = "msg_999999999999"
+		})
+
+		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+		if err == nil {
+			t.Fatalf("expected missing response message to fail")
+		}
+		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
+			t.Fatalf("expected mismatch error, got %v", err)
+		}
+	})
+
+	t.Run("reviewer mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		fixture := seedPendingReviewFixture(t)
+		mutateReviewHandoffDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(handoffDoc map[string]any) {
+			handoffDoc["reviewer"] = "backend-high"
+		})
+
+		_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+		if err == nil {
+			t.Fatalf("expected reviewer mismatch to fail")
 		}
 		if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
 			t.Fatalf("expected mismatch error, got %v", err)
@@ -363,4 +429,58 @@ func mutateChildTaskDocument(t *testing.T, stateDir string, runID protocol.RunID
 	if err := os.WriteFile(path, updated, 0o644); err != nil {
 		t.Fatalf("write task yaml document: %v", err)
 	}
+}
+
+func mutateReviewHandoffDocument(t *testing.T, stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID, mutate func(handoffDoc map[string]any)) {
+	t.Helper()
+
+	path := mailbox.RunReviewHandoffPath(stateDir, runID, sourceTaskID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read review handoff yaml: %v", err)
+	}
+
+	handoffDoc := make(map[string]any)
+	if err := yaml.Unmarshal(data, &handoffDoc); err != nil {
+		t.Fatalf("unmarshal review handoff yaml document: %v", err)
+	}
+
+	mutate(handoffDoc)
+
+	updated, err := yaml.Marshal(handoffDoc)
+	if err != nil {
+		t.Fatalf("marshal review handoff yaml document: %v", err)
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		t.Fatalf("write review handoff yaml: %v", err)
+	}
+}
+
+func seedRespondedReviewFixture(t *testing.T) pendingReviewFixture {
+	t.Helper()
+
+	fixture := seedPendingReviewFixture(t)
+	store := mailbox.NewStore(fixture.cfg.Session.StateDir)
+	responseID, err := ReviewRespond(
+		fixture.cfg.Session.StateDir,
+		store,
+		"reviewer",
+		fixture.handoff.ReviewMessageID,
+		protocol.ReviewOutcomeApproved,
+		[]byte("approved with no changes\n"),
+	)
+	if err != nil {
+		t.Fatalf("review respond: %v", err)
+	}
+
+	updated, err := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir).ReadReviewHandoff(fixture.run.RunID, fixture.sourceTask.TaskID)
+	if err != nil {
+		t.Fatalf("read updated review handoff: %v", err)
+	}
+	if updated.ResponseMessageID != responseID {
+		t.Fatalf("response message id = %q, want %q", updated.ResponseMessageID, responseID)
+	}
+	fixture.handoff = updated
+
+	return fixture
 }
