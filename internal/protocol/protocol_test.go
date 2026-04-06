@@ -237,22 +237,22 @@ func validBlockerCase() *BlockerCase {
 	now := time.Now().UTC()
 
 	return &BlockerCase{
-		RunID:           NewRunID(1),
-		SourceTaskID:    NewTaskID(1),
-		SourceMessageID: NewMessageID(1),
-		SourceOwner:     AgentName("coordinator"),
-		CurrentTaskID:   NewTaskID(2),
+		RunID:            NewRunID(1),
+		SourceTaskID:     NewTaskID(1),
+		SourceMessageID:  NewMessageID(1),
+		SourceOwner:      AgentName("coordinator"),
+		CurrentTaskID:    NewTaskID(2),
 		CurrentMessageID: NewMessageID(2),
-		CurrentOwner:    AgentName("backend"),
-		DeclaredState:   "block",
-		BlockKind:       BlockKindRerouteNeeded,
-		Reason:          "needs explicit next step",
-		SelectedAction:  BlockerActionReroute,
-		Status:          BlockerStatusActive,
-		RerouteCount:    0,
-		MaxReroutes:     1,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		CurrentOwner:     AgentName("backend"),
+		DeclaredState:    "block",
+		BlockKind:        BlockKindRerouteNeeded,
+		Reason:           "needs explicit next step",
+		SelectedAction:   BlockerActionReroute,
+		Status:           BlockerStatusActive,
+		RerouteCount:     0,
+		MaxReroutes:      1,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 }
 

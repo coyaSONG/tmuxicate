@@ -32,6 +32,47 @@ const (
 	ReviewHandoffStatusHandoffFailed ReviewHandoffStatus = "handoff_failed"
 )
 
+type WaitKind string
+
+const (
+	WaitKindDependencyReply WaitKind = "dependency_reply"
+	WaitKindExternalEvent   WaitKind = "external_event"
+)
+
+type BlockKind string
+
+const (
+	BlockKindAgentClarification BlockKind = "agent_clarification"
+	BlockKindRerouteNeeded      BlockKind = "reroute_needed"
+	BlockKindHumanDecision      BlockKind = "human_decision"
+	BlockKindUnsupported        BlockKind = "unsupported"
+)
+
+type BlockerAction string
+
+const (
+	BlockerActionWatch                BlockerAction = "watch"
+	BlockerActionClarificationRequest BlockerAction = "clarification_request"
+	BlockerActionReroute              BlockerAction = "reroute"
+	BlockerActionEscalate             BlockerAction = "escalate"
+)
+
+type BlockerStatus string
+
+const (
+	BlockerStatusActive    BlockerStatus = "active"
+	BlockerStatusEscalated BlockerStatus = "escalated"
+	BlockerStatusResolved  BlockerStatus = "resolved"
+)
+
+type BlockerResolutionAction string
+
+const (
+	BlockerResolutionActionManualReroute BlockerResolutionAction = "manual_reroute"
+	BlockerResolutionActionClarify       BlockerResolutionAction = "clarify"
+	BlockerResolutionActionDismiss       BlockerResolutionAction = "dismiss"
+)
+
 type AgentSnapshot struct {
 	Name      AgentName `yaml:"name"`
 	Alias     string    `yaml:"alias"`
@@ -89,6 +130,54 @@ type ReviewHandoff struct {
 	Outcome           ReviewOutcome       `yaml:"outcome,omitempty"`
 	CreatedAt         time.Time           `yaml:"created_at"`
 	RespondedAt       *time.Time          `yaml:"responded_at,omitempty"`
+}
+
+type RecommendedAction struct {
+	Kind BlockerResolutionAction `yaml:"kind"`
+	Note string                  `yaml:"note,omitempty"`
+}
+
+type BlockerAttempt struct {
+	Action    BlockerAction `yaml:"action"`
+	TaskID    TaskID        `yaml:"task_id,omitempty"`
+	MessageID MessageID     `yaml:"message_id,omitempty"`
+	Owner     AgentName     `yaml:"owner,omitempty"`
+	Note      string        `yaml:"note,omitempty"`
+	CreatedAt time.Time     `yaml:"created_at"`
+}
+
+type BlockerResolution struct {
+	Action           BlockerResolutionAction `yaml:"action"`
+	CreatedTaskID    TaskID                  `yaml:"created_task_id,omitempty"`
+	CreatedMessageID MessageID               `yaml:"created_message_id,omitempty"`
+	ResolvedBy       AgentName               `yaml:"resolved_by,omitempty"`
+	Note             string                  `yaml:"note,omitempty"`
+	CreatedAt        time.Time               `yaml:"created_at"`
+}
+
+type BlockerCase struct {
+	RunID             RunID              `yaml:"run_id"`
+	SourceTaskID      TaskID             `yaml:"source_task_id"`
+	SourceMessageID   MessageID          `yaml:"source_message_id"`
+	SourceOwner       AgentName          `yaml:"source_owner"`
+	CurrentTaskID     TaskID             `yaml:"current_task_id,omitempty"`
+	CurrentMessageID  MessageID          `yaml:"current_message_id,omitempty"`
+	CurrentOwner      AgentName          `yaml:"current_owner"`
+	DeclaredState     string             `yaml:"declared_state"`
+	WaitKind          WaitKind           `yaml:"wait_kind,omitempty"`
+	BlockKind         BlockKind          `yaml:"block_kind,omitempty"`
+	Reason            string             `yaml:"reason"`
+	SelectedAction    BlockerAction      `yaml:"selected_action"`
+	Status            BlockerStatus      `yaml:"status"`
+	RerouteCount      int                `yaml:"reroute_count"`
+	MaxReroutes       int                `yaml:"max_reroutes"`
+	RecommendedAction *RecommendedAction `yaml:"recommended_action,omitempty"`
+	Resolution        *BlockerResolution `yaml:"resolution,omitempty"`
+	CreatedAt         time.Time          `yaml:"created_at"`
+	UpdatedAt         time.Time          `yaml:"updated_at"`
+	EscalatedAt       *time.Time         `yaml:"escalated_at,omitempty"`
+	ResolvedAt        *time.Time         `yaml:"resolved_at,omitempty"`
+	Attempts          []BlockerAttempt   `yaml:"attempts,omitempty"`
 }
 
 type RouteChildTaskRequest struct {

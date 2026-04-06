@@ -357,6 +357,114 @@ func (h *ReviewHandoff) Validate() error {
 	return nil
 }
 
+func (b *BlockerCase) Validate() error {
+	if b == nil {
+		return errors.New("blocker case is required")
+	}
+	if !isGeneratedRunID(b.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if !isGeneratedTaskID(b.SourceTaskID) {
+		return errors.New("source_task_id must use generated task_ identifier")
+	}
+	if strings.TrimSpace(string(b.SourceMessageID)) == "" {
+		return errors.New("source_message_id is required")
+	}
+	if strings.TrimSpace(string(b.SourceOwner)) == "" {
+		return errors.New("source_owner is required")
+	}
+	if b.CurrentTaskID != "" && !isGeneratedTaskID(b.CurrentTaskID) {
+		return errors.New("current_task_id must use generated task_ identifier")
+	}
+	if strings.TrimSpace(string(b.CurrentMessageID)) == "" {
+		return errors.New("current_message_id is required")
+	}
+	if strings.TrimSpace(string(b.CurrentOwner)) == "" {
+		return errors.New("current_owner is required")
+	}
+	if strings.TrimSpace(b.Reason) == "" {
+		return errors.New("reason is required")
+	}
+	if err := b.SelectedAction.Validate(); err != nil {
+		return fmt.Errorf("selected_action: %w", err)
+	}
+	if err := b.Status.Validate(); err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if b.RerouteCount < 0 {
+		return errors.New("reroute_count must be >= 0")
+	}
+	if b.MaxReroutes < 0 {
+		return errors.New("max_reroutes must be >= 0")
+	}
+	if b.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+	if b.UpdatedAt.IsZero() {
+		return errors.New("updated_at is required")
+	}
+	if b.EscalatedAt != nil && b.EscalatedAt.IsZero() {
+		return errors.New("escalated_at must not be zero")
+	}
+	if b.ResolvedAt != nil && b.ResolvedAt.IsZero() {
+		return errors.New("resolved_at must not be zero")
+	}
+
+	switch b.DeclaredState {
+	case "wait":
+		if err := b.WaitKind.Validate(); err != nil {
+			return fmt.Errorf("wait_kind: %w", err)
+		}
+		if b.BlockKind != "" {
+			return errors.New("block_kind must be empty when declared_state=wait")
+		}
+	case "block":
+		if err := b.BlockKind.Validate(); err != nil {
+			return fmt.Errorf("block_kind: %w", err)
+		}
+		if b.WaitKind != "" {
+			return errors.New("wait_kind must be empty when declared_state=block")
+		}
+	default:
+		return errors.New(`declared_state must be either "wait" or "block"`)
+	}
+
+	if b.RecommendedAction != nil {
+		if err := b.RecommendedAction.Validate(); err != nil {
+			return fmt.Errorf("recommended_action: %w", err)
+		}
+	}
+	if b.Resolution != nil {
+		if err := b.Resolution.Validate(); err != nil {
+			return fmt.Errorf("resolution: %w", err)
+		}
+	}
+	for i := range b.Attempts {
+		if err := b.Attempts[i].Validate(); err != nil {
+			return fmt.Errorf("attempts[%d]: %w", i, err)
+		}
+	}
+
+	switch b.Status {
+	case BlockerStatusEscalated:
+		if b.RecommendedAction == nil {
+			return errors.New("escalated blocker cases require recommended_action.kind")
+		}
+		if b.EscalatedAt == nil {
+			return errors.New("escalated blocker cases require escalated_at")
+		}
+	case BlockerStatusResolved:
+		if b.Resolution == nil {
+			return errors.New("resolved blocker cases require resolution.action")
+		}
+		if b.ResolvedAt == nil {
+			return errors.New("resolved blocker cases require resolved_at")
+		}
+	}
+
+	return nil
+}
+
 func (c TaskClass) Validate() error {
 	switch c {
 	case TaskClassImplementation, TaskClassResearch, TaskClassReview:
@@ -382,6 +490,125 @@ func (s ReviewHandoffStatus) Validate() error {
 	default:
 		return fmt.Errorf("must be one of %q, %q, or %q", ReviewHandoffStatusPending, ReviewHandoffStatusResponded, ReviewHandoffStatusHandoffFailed)
 	}
+}
+
+func (w WaitKind) Validate() error {
+	switch w {
+	case WaitKindDependencyReply, WaitKindExternalEvent:
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q or %q", WaitKindDependencyReply, WaitKindExternalEvent)
+	}
+}
+
+func (b BlockKind) Validate() error {
+	switch b {
+	case BlockKindAgentClarification, BlockKindRerouteNeeded, BlockKindHumanDecision, BlockKindUnsupported:
+		return nil
+	default:
+		return fmt.Errorf(
+			"must be one of %q, %q, %q, or %q",
+			BlockKindAgentClarification,
+			BlockKindRerouteNeeded,
+			BlockKindHumanDecision,
+			BlockKindUnsupported,
+		)
+	}
+}
+
+func (a BlockerAction) Validate() error {
+	switch a {
+	case BlockerActionWatch, BlockerActionClarificationRequest, BlockerActionReroute, BlockerActionEscalate:
+		return nil
+	default:
+		return fmt.Errorf(
+			"must be one of %q, %q, %q, or %q",
+			BlockerActionWatch,
+			BlockerActionClarificationRequest,
+			BlockerActionReroute,
+			BlockerActionEscalate,
+		)
+	}
+}
+
+func (s BlockerStatus) Validate() error {
+	switch s {
+	case BlockerStatusActive, BlockerStatusEscalated, BlockerStatusResolved:
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q, %q, or %q", BlockerStatusActive, BlockerStatusEscalated, BlockerStatusResolved)
+	}
+}
+
+func (a BlockerResolutionAction) Validate() error {
+	switch a {
+	case BlockerResolutionActionManualReroute, BlockerResolutionActionClarify, BlockerResolutionActionDismiss:
+		return nil
+	default:
+		return fmt.Errorf(
+			"must be one of %q, %q, or %q",
+			BlockerResolutionActionManualReroute,
+			BlockerResolutionActionClarify,
+			BlockerResolutionActionDismiss,
+		)
+	}
+}
+
+func (a *RecommendedAction) Validate() error {
+	if a == nil {
+		return errors.New("recommended action is required")
+	}
+	if err := a.Kind.Validate(); err != nil {
+		return fmt.Errorf("kind: %w", err)
+	}
+
+	return nil
+}
+
+func (a *BlockerAttempt) Validate() error {
+	if a == nil {
+		return errors.New("blocker attempt is required")
+	}
+	if err := a.Action.Validate(); err != nil {
+		return fmt.Errorf("action: %w", err)
+	}
+	if a.TaskID != "" && !isGeneratedTaskID(a.TaskID) {
+		return errors.New("task_id must use generated task_ identifier")
+	}
+	if a.MessageID != "" && strings.TrimSpace(string(a.MessageID)) == "" {
+		return errors.New("message_id must not be blank")
+	}
+	if a.Owner != "" && strings.TrimSpace(string(a.Owner)) == "" {
+		return errors.New("owner must not be blank")
+	}
+	if a.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+
+	return nil
+}
+
+func (r *BlockerResolution) Validate() error {
+	if r == nil {
+		return errors.New("blocker resolution is required")
+	}
+	if err := r.Action.Validate(); err != nil {
+		return fmt.Errorf("action: %w", err)
+	}
+	if r.CreatedTaskID != "" && !isGeneratedTaskID(r.CreatedTaskID) {
+		return errors.New("created_task_id must use generated task_ identifier")
+	}
+	if r.CreatedMessageID != "" && strings.TrimSpace(string(r.CreatedMessageID)) == "" {
+		return errors.New("created_message_id must not be blank")
+	}
+	if r.ResolvedBy != "" && strings.TrimSpace(string(r.ResolvedBy)) == "" {
+		return errors.New("resolved_by must not be blank")
+	}
+	if r.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+
+	return nil
 }
 
 func (r *RouteChildTaskRequest) Validate() error {
