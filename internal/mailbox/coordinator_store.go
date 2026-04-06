@@ -128,6 +128,113 @@ func (s *CoordinatorStore) CreateReviewHandoff(handoff *protocol.ReviewHandoff) 
 	return s.writeReviewHandoff(path, handoff)
 }
 
+func (s *CoordinatorStore) CreateBlockerCase(caseDoc *protocol.BlockerCase) error {
+	if caseDoc == nil {
+		return errors.New("blocker case is required")
+	}
+	if err := caseDoc.Validate(); err != nil {
+		return fmt.Errorf("validate blocker case: %w", err)
+	}
+
+	path := RunBlockerCasePath(s.stateDir, caseDoc.RunID, caseDoc.SourceTaskID)
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("blocker case for %s already exists", caseDoc.SourceTaskID)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat blocker case: %w", err)
+	}
+
+	return s.writeBlockerCase(path, caseDoc)
+}
+
+func (s *CoordinatorStore) ReadBlockerCase(runID protocol.RunID, sourceTaskID protocol.TaskID) (*protocol.BlockerCase, error) {
+	data, err := os.ReadFile(RunBlockerCasePath(s.stateDir, runID, sourceTaskID))
+	if err != nil {
+		return nil, fmt.Errorf("read blocker case: %w", err)
+	}
+
+	var caseDoc protocol.BlockerCase
+	if err := yaml.Unmarshal(data, &caseDoc); err != nil {
+		return nil, fmt.Errorf("unmarshal blocker case: %w", err)
+	}
+	if err := caseDoc.Validate(); err != nil {
+		return nil, fmt.Errorf("validate blocker case: %w", err)
+	}
+	if caseDoc.RunID != runID {
+		return nil, fmt.Errorf("validate blocker case: run_id %s does not match path", caseDoc.RunID)
+	}
+	if caseDoc.SourceTaskID != sourceTaskID {
+		return nil, fmt.Errorf("validate blocker case: source_task_id %s does not match path", caseDoc.SourceTaskID)
+	}
+
+	return &caseDoc, nil
+}
+
+func (s *CoordinatorStore) UpdateBlockerCase(runID protocol.RunID, sourceTaskID protocol.TaskID, updateFn func(*protocol.BlockerCase) error) error {
+	if updateFn == nil {
+		return errors.New("updateFn is required")
+	}
+
+	caseDoc, err := s.ReadBlockerCase(runID, sourceTaskID)
+	if err != nil {
+		return err
+	}
+
+	if err := updateFn(caseDoc); err != nil {
+		return err
+	}
+	if err := caseDoc.Validate(); err != nil {
+		return fmt.Errorf("validate updated blocker case: %w", err)
+	}
+	if caseDoc.RunID != runID {
+		return errors.New("updated blocker case run_id must match path")
+	}
+	if caseDoc.SourceTaskID != sourceTaskID {
+		return errors.New("updated blocker case source_task_id must match path")
+	}
+
+	return s.writeBlockerCase(RunBlockerCasePath(s.stateDir, runID, sourceTaskID), caseDoc)
+}
+
+func (s *CoordinatorStore) FindBlockerCaseByCurrentTaskID(runID protocol.RunID, currentTaskID protocol.TaskID) (*protocol.BlockerCase, error) {
+	if currentTaskID == "" {
+		return nil, errors.New("currentTaskID is required")
+	}
+
+	entries, err := os.ReadDir(RunBlockersDir(s.stateDir, runID))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("blocker case for current task %s: %w", currentTaskID, os.ErrNotExist)
+		}
+		return nil, fmt.Errorf("read blocker cases: %w", err)
+	}
+
+	var matched *protocol.BlockerCase
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		caseDoc, err := s.ReadBlockerCase(runID, sourceTaskID)
+		if err != nil {
+			return nil, err
+		}
+		if caseDoc.CurrentTaskID != currentTaskID {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("multiple blocker cases found for current task %s", currentTaskID)
+		}
+		matched = caseDoc
+	}
+
+	if matched == nil {
+		return nil, fmt.Errorf("blocker case for current task %s: %w", currentTaskID, os.ErrNotExist)
+	}
+
+	return matched, nil
+}
+
 func (s *CoordinatorStore) ReadReviewHandoff(runID protocol.RunID, sourceTaskID protocol.TaskID) (*protocol.ReviewHandoff, error) {
 	data, err := os.ReadFile(RunReviewHandoffPath(s.stateDir, runID, sourceTaskID))
 	if err != nil {
@@ -212,6 +319,22 @@ func (s *CoordinatorStore) writeReviewHandoff(path string, handoff *protocol.Rev
 	}
 	if err := writeFileAtomically(path, data, 0o644); err != nil {
 		return fmt.Errorf("write review handoff: %w", err)
+	}
+
+	return nil
+}
+
+func (s *CoordinatorStore) writeBlockerCase(path string, caseDoc *protocol.BlockerCase) error {
+	if err := ensureDir(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(caseDoc)
+	if err != nil {
+		return fmt.Errorf("marshal blocker case: %w", err)
+	}
+	if err := writeFileAtomically(path, data, 0o644); err != nil {
+		return fmt.Errorf("write blocker case: %w", err)
 	}
 
 	return nil
