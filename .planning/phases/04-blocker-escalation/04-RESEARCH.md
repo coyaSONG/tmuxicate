@@ -356,17 +356,15 @@ Source: `cmd/tmuxicate/main.go`, using Cobra’s documented command-tree API. [V
 
 All substantive claims in this research were verified from the repo, planning artifacts, local tool checks, or official Cobra docs; no `[ASSUMED]` claims remain. [VERIFIED: codebase inspection][CITED: https://pkg.go.dev/github.com/spf13/cobra]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What exact side effect should `blocker resolve --action clarify` emit?**
-   - What we know: The canonical resolution must be recorded on `BlockerCase`, and mailbox/routing side effects are optional reuse, not the source of truth. [VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md]
-   - What's unclear: Whether clarification should be sent as a reply to the current task message, a new coordinator `decision`/`note`, or only an artifact update plus operator note. [VERIFIED: cmd/tmuxicate/main.go][VERIFIED: internal/session/review_response.go][VERIFIED: internal/session/reply.go]
-   - Recommendation: Keep the artifact update mandatory, and if a message side effect is added, keep it in the existing run thread and record the emitted message ID on the blocker artifact for rebuild visibility. [VERIFIED: internal/session/review_response.go][VERIFIED: internal/session/run.go]
+   - Resolution: The canonical truth remains the `BlockerCase` artifact update, and the side effect is an explicit coordinator `decision` message sent to the blocker case's `current_owner` in the existing run thread, with `ReplyTo` set to `current_message_id`; the emitted message ID is recorded on the blocker artifact. [VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md][VERIFIED: internal/session/review_response.go][VERIFIED: internal/session/run.go]
+   - Why this closes the question: It matches locked decision D-15, reuses the existing message/thread model without inventing a human mailbox, and gives `run show` a durable reference to the operator action. [VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md][VERIFIED: cmd/tmuxicate/main.go]
 
 2. **How much of general task-state rendering should Phase 4 fix versus only blocker rendering?**
-   - What we know: Current `run show` declared-state loading is agent-global, while Phase 4 blocker visibility is explicitly task-local. [VERIFIED: internal/session/run_rebuild.go][VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md]
-   - What's unclear: Whether Phase 4 should broaden that fix to all task states or keep the correction limited to blocker-chain rendering. [VERIFIED: internal/session/run_rebuild.go]
-   - Recommendation: Make blocker blocks fully task-local in Phase 4, and leave any broader per-task state-history redesign to Phase 5 unless the implementation can tighten both without scope creep. [VERIFIED: .planning/ROADMAP.md][VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md]
+   - Resolution: Phase 4 fixes blocker-specific task-local rendering only. `run show` must derive blocker visibility from `BlockerCase` linkage under the source task; any broader redesign of general task-state rendering remains Phase 5 work unless it falls out naturally without expanding scope. [VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md][VERIFIED: .planning/ROADMAP.md][VERIFIED: internal/session/run_rebuild.go]
+   - Why this closes the question: It satisfies locked decisions D-16 through D-18 and avoids turning the blocker phase into a broader run-summary or task-history redesign. [VERIFIED: .planning/phases/04-blocker-escalation/04-CONTEXT.md]
 
 ## Environment Availability
 
