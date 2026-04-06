@@ -2,7 +2,7 @@
 
 ## What This Is
 
-`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. The next project scope extends that foundation with coordinator-driven automation for task decomposition, routing, review flow, and blocker handling.
+`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. The current milestone extends that foundation with coordinator-driven automation for task decomposition, routing, review flow, blocker handling, and operator-facing run summaries.
 
 ## Core Value
 
@@ -22,10 +22,11 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 - ✓ Coordinator can route implementation, research, and review tasks to the right agents using declared roles and team relationships — validated in Phase 2: Role-Based Routing
 - ✓ Coordinator can manage a review handoff so completed implementation work reaches a reviewer and the resulting feedback stays linked to the coordinator run — validated in Phase 3: Review Handoff Flow
 - ✓ Coordinator can react to `wait` and `block` states by requesting clarification, re-routing work, or escalating to the human operator through durable blocker cases and explicit operator resolution — validated in Phase 4: Blocker Escalation
+- ✓ Coordinator can produce an end-of-run summary that explains what was completed, what is waiting, what is blocked, what is under review, and what still needs human attention — validated in Phase 5: Run Summaries
 
 ### Active
 
-- [ ] Coordinator can produce an end-of-run summary that explains what was completed, what is waiting, what is blocked, and what still needs human attention
+- None within the current v1 milestone scope
 
 ### Out of Scope
 
@@ -36,7 +37,7 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ## Context
 
-The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The current product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts, and blocker escalation with durable blocker cases plus explicit operator resolution. The remaining milestone work is operator-facing run summaries, all on top of the same mailbox/tmux substrate rather than a replacement orchestration system.
+The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The current product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts, blocker escalation with durable blocker cases plus explicit operator resolution, and operator-facing run summaries rebuilt from the same durable run graph. The milestone is complete without introducing a replacement orchestration system.
 
 ## Constraints
 
@@ -58,6 +59,7 @@ The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmux
 | Keep review linkage in a dedicated `ReviewHandoff` artifact keyed by source task ID | Review state must stay durable, explicit, and idempotent without mutating child-task contracts | ✓ Good |
 | Record reviewer outcomes through `tmuxicate review respond` and surface them in `run show` | Review decisions should stay visible through existing operator workflows instead of transcript-only context | ✓ Good |
 | Keep blocker handling on a dedicated `BlockerCase` artifact with code-driven action selection and explicit `blocker resolve` responses | Blocked work must remain durable, inspectable, ceiling-bounded, and human-escalatable without heuristic coordinator behavior | ✓ Good |
+| Keep run summaries as a derived `RunGraph` projection rendered through `run show` and root completion output | Operator summaries must stay inspectable, additive to existing detail, and free of new summary persistence/state machines | ✓ Good |
 
 ## Evolution
 
@@ -77,4 +79,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after Phase 4 completion*
+*Last updated: 2026-04-06 after Phase 05 completion*
