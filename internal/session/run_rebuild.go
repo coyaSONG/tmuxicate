@@ -22,6 +22,7 @@ type RunGraphTask struct {
 	ReceiptState  protocol.FolderState
 	DeclaredState string
 	ReviewHandoff *protocol.ReviewHandoff
+	BlockerCase   *protocol.BlockerCase
 }
 
 type runMessageSummary struct {
@@ -156,6 +157,58 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		sourceTask.ReviewHandoff = handoff
 	}
 
+	blockers, err := loadRunBlockers(stateDir, run.RunID)
+	if err != nil {
+		return nil, err
+	}
+	for _, blocker := range blockers {
+		if blocker.RunID != run.RunID {
+			return nil, coordinatorArtifactMismatch("blocker case %s belongs to run %s, not %s", blocker.SourceTaskID, blocker.RunID, run.RunID)
+		}
+
+		sourceTask, ok := taskByID[blocker.SourceTaskID]
+		if !ok {
+			return nil, coordinatorArtifactMismatch("blocker case references missing source task %s", blocker.SourceTaskID)
+		}
+		if sourceTask.Task.MessageID != blocker.SourceMessageID {
+			return nil, coordinatorArtifactMismatch("blocker case source message mismatch for task %s", blocker.SourceTaskID)
+		}
+
+		currentTask := sourceTask
+		if blocker.CurrentTaskID != "" {
+			currentTask, ok = taskByID[blocker.CurrentTaskID]
+			if !ok {
+				return nil, coordinatorArtifactMismatch("blocker case references missing current task %s", blocker.CurrentTaskID)
+			}
+		}
+		if blocker.CurrentMessageID != "" && currentTask.Task.MessageID != blocker.CurrentMessageID {
+			return nil, coordinatorArtifactMismatch("blocker case current message mismatch for task %s", currentTask.Task.TaskID)
+		}
+		if blocker.CurrentOwner != "" && currentTask.Task.Owner != blocker.CurrentOwner {
+			return nil, coordinatorArtifactMismatch("blocker case current owner mismatch for task %s", currentTask.Task.TaskID)
+		}
+
+		if blocker.Resolution != nil {
+			var createdTask *RunGraphTask
+			if blocker.Resolution.CreatedTaskID != "" {
+				createdTask, ok = taskByID[blocker.Resolution.CreatedTaskID]
+				if !ok {
+					return nil, coordinatorArtifactMismatch("blocker case resolution references missing task %s", blocker.Resolution.CreatedTaskID)
+				}
+			}
+			if blocker.Resolution.CreatedMessageID != "" {
+				if _, ok := messages[blocker.Resolution.CreatedMessageID]; !ok {
+					return nil, coordinatorArtifactMismatch("blocker case resolution references missing message %s", blocker.Resolution.CreatedMessageID)
+				}
+				if createdTask != nil && createdTask.Task.MessageID != blocker.Resolution.CreatedMessageID {
+					return nil, coordinatorArtifactMismatch("blocker case resolution message mismatch for task %s", blocker.Resolution.CreatedTaskID)
+				}
+			}
+		}
+
+		sourceTask.BlockerCase = blocker
+	}
+
 	sort.Slice(graph.Tasks, func(i, j int) bool {
 		return graph.Tasks[i].Task.TaskID < graph.Tasks[j].Task.TaskID
 	})
@@ -206,6 +259,38 @@ func FormatRunGraph(graph *RunGraph) string {
 			fmt.Fprintf(&builder, "Response: %s\n", displayMessageID(task.ReviewHandoff.ResponseMessageID))
 			fmt.Fprintf(&builder, "Outcome: %s\n", normalizeDisplayValue(string(task.ReviewHandoff.Outcome)))
 			fmt.Fprintf(&builder, "Failure: %s\n", normalizeDisplayValue(task.ReviewHandoff.FailureSummary))
+		}
+		if task.BlockerCase != nil {
+			fmt.Fprintf(&builder, "Blocker: %s\n", normalizeDisplayValue(string(task.BlockerCase.Status)))
+			if task.BlockerCase.CurrentTaskID != "" {
+				fmt.Fprintf(&builder, "Current Task: %s\n", displayTaskID(task.BlockerCase.CurrentTaskID))
+			}
+			if task.BlockerCase.CurrentOwner != "" {
+				fmt.Fprintf(&builder, "Current Owner: %s\n", normalizeDisplayValue(string(task.BlockerCase.CurrentOwner)))
+			}
+			if task.BlockerCase.CurrentMessageID != "" {
+				fmt.Fprintf(&builder, "Current Message: %s\n", displayMessageID(task.BlockerCase.CurrentMessageID))
+			}
+			if task.BlockerCase.DeclaredState != "" {
+				fmt.Fprintf(&builder, "Declared State: %s\n", normalizeDisplayValue(task.BlockerCase.DeclaredState))
+			}
+			if task.BlockerCase.WaitKind != "" {
+				fmt.Fprintf(&builder, "Wait Kind: %s\n", normalizeDisplayValue(string(task.BlockerCase.WaitKind)))
+			}
+			if task.BlockerCase.BlockKind != "" {
+				fmt.Fprintf(&builder, "Block Kind: %s\n", normalizeDisplayValue(string(task.BlockerCase.BlockKind)))
+			}
+			if task.BlockerCase.Reason != "" {
+				fmt.Fprintf(&builder, "Reason: %s\n", normalizeDisplayValue(task.BlockerCase.Reason))
+			}
+			fmt.Fprintf(&builder, "Next Action: %s\n", normalizeDisplayValue(string(task.BlockerCase.SelectedAction)))
+			fmt.Fprintf(&builder, "Reroutes: %s\n", formatBlockerReroutes(task.BlockerCase))
+			if task.BlockerCase.RecommendedAction != nil {
+				fmt.Fprintf(&builder, "Recommended Action: %s\n", formatRecommendedAction(task.BlockerCase.RecommendedAction))
+			}
+			if task.BlockerCase.Resolution != nil {
+				fmt.Fprintf(&builder, "Resolution: %s\n", formatBlockerResolution(task.BlockerCase.Resolution))
+			}
 		}
 	}
 
@@ -331,6 +416,36 @@ func loadRunReviewHandoffs(stateDir string, runID protocol.RunID) (map[protocol.
 	return handoffs, nil
 }
 
+func loadRunBlockers(stateDir string, runID protocol.RunID) (map[protocol.TaskID]*protocol.BlockerCase, error) {
+	entries, err := os.ReadDir(mailbox.RunBlockersDir(stateDir, runID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[protocol.TaskID]*protocol.BlockerCase{}, nil
+		}
+		return nil, fmt.Errorf("read run blockers dir: %w", err)
+	}
+
+	blockers := make(map[protocol.TaskID]*protocol.BlockerCase, len(entries))
+	coordinatorStore := mailbox.NewCoordinatorStore(stateDir)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		blocker, err := coordinatorStore.ReadBlockerCase(runID, sourceTaskID)
+		if err != nil {
+			if strings.Contains(err.Error(), "does not match path") {
+				return nil, coordinatorArtifactMismatch("blocker case %s path mismatch", sourceTaskID)
+			}
+			return nil, err
+		}
+		blockers[sourceTaskID] = blocker
+	}
+
+	return blockers, nil
+}
+
 func coordinatorArtifactMismatch(format string, args ...any) error {
 	return fmt.Errorf("coordinator artifact mismatch: "+format, args...)
 }
@@ -406,4 +521,42 @@ func displayMessageID(messageID protocol.MessageID) string {
 	}
 
 	return string(messageID)
+}
+
+func formatBlockerReroutes(blocker *protocol.BlockerCase) string {
+	if blocker == nil {
+		return "-"
+	}
+
+	return fmt.Sprintf("%d/%d", blocker.RerouteCount, blocker.MaxReroutes)
+}
+
+func formatRecommendedAction(action *protocol.RecommendedAction) string {
+	if action == nil {
+		return "-"
+	}
+	if strings.TrimSpace(action.Note) == "" {
+		return string(action.Kind)
+	}
+
+	return fmt.Sprintf("%s (%s)", action.Kind, action.Note)
+}
+
+func formatBlockerResolution(resolution *protocol.BlockerResolution) string {
+	if resolution == nil {
+		return "-"
+	}
+
+	parts := []string{string(resolution.Action)}
+	if resolution.CreatedTaskID != "" {
+		parts = append(parts, fmt.Sprintf("task=%s", resolution.CreatedTaskID))
+	}
+	if resolution.CreatedMessageID != "" {
+		parts = append(parts, fmt.Sprintf("message=%s", resolution.CreatedMessageID))
+	}
+	if strings.TrimSpace(resolution.Note) != "" {
+		parts = append(parts, resolution.Note)
+	}
+
+	return strings.Join(parts, "; ")
 }
