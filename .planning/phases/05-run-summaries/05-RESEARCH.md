@@ -338,31 +338,25 @@ Source: `internal/protocol/coordinator.go` (abridged). [VERIFIED: internal/proto
 - Separate summary-only commands or persisted summary snapshots are explicitly out of scope for this phase. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md]
 - Treating transcripts as the place to reconstruct run-level status is inconsistent with the repo’s filesystem-first, artifact-backed operator model. [VERIFIED: .planning/PROJECT.md][VERIFIED: .planning/codebase/ARCHITECTURE.md][VERIFIED: DESIGN.md]
 
-## Assumptions Log
+## Assumptions Log (Resolved by Planning)
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Plain source tasks with no blocker/review override and receipt state `unread`/`active` should summarize as `pending`. [ASSUMED] | Architecture Patterns | Ordinary in-progress work could be mislabeled or omitted if planning chooses a different fallback bucket. |
-| A2 | `ReviewHandoff.Status == responded` with `Outcome == approved` should fall through to `completed` rather than a distinct top-level review bucket. [ASSUMED] | Architecture Patterns | Approved review items could remain under-review forever or get inconsistent terminal labeling. |
-| A3 | If a rerouted current task later creates a review handoff, Phase 5 should fold that review metadata back onto the original source row by following `BlockerCase.CurrentTaskID`. [ASSUMED] | Architecture Patterns | The summary can double-count or hide logical work after reroute + review chains. |
-| A4 | The preferred one-time completion hook is the coordinator root message moving to `done`, because no other unique run-completion artifact exists today. [ASSUMED] | Architecture Patterns | Auto-print may not fire when expected if the product instead wants a graph-derived completion edge. |
+| A1 | Plain source tasks with no blocker/review override and receipt state `unread`/`active` summarize as `pending`. [RESOLVED: 05-01-PLAN.md] | Architecture Patterns | Ordinary in-progress work would be mislabeled or omitted if implementation drifts from the locked fallback bucket. |
+| A2 | `ReviewHandoff.Status == responded` with `Outcome == approved` falls through to `completed`, while `changes_requested` remains `under_review`. [RESOLVED: 05-01-PLAN.md] | Architecture Patterns | Approved review items could remain under-review forever or changes-requested items could be misreported as complete. |
+| A3 | If a rerouted current task later creates a review handoff, Phase 5 folds that review metadata back onto the original source row by following `BlockerCase.CurrentTaskID`. [RESOLVED: 05-01-PLAN.md] | Architecture Patterns | The summary could double-count or hide logical work after reroute + review chains. |
+| A4 | The one-time completion hook is the coordinator root message moving to `done`; no graph-derived completion state or new summary artifact is introduced in Phase 5. [RESOLVED: 05-02-PLAN.md] | Architecture Patterns | Summary auto-print could fire on the wrong edge or require out-of-scope persistence. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What bucket should `handoff_failed` use in the run summary?**
-   What we know: Phase 3 keeps the source implementation task `done` and records `ReviewHandoffStatusHandoffFailed` with a failure summary on the canonical handoff artifact. [VERIFIED: .planning/phases/03-review-handoff-flow/03-CONTEXT.md][VERIFIED: internal/protocol/coordinator.go][VERIFIED: internal/session/task_cmd_test.go]
-   What's unclear: Phase 5 locked decisions define under-review for pending review and `changes_requested`, but they do not say whether `handoff_failed` should be shown as `pending`, `completed`, or another note-bearing fallback. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md]
-   Recommendation: Lock this in planning before implementation. The safest current default is `pending` with an explicit failure note, because it signals unfinished logical work without inventing a new top-level status. [ASSUMED]
+   Resolution: Treat `handoff_failed` as `pending` and surface the handoff failure note on the summary item instead of inventing a new top-level bucket. This aligns with the locked Phase 5 scope and the planner's explicit Task 2 mapping in `05-01-PLAN.md`. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md][VERIFIED: .planning/phases/05-run-summaries/05-01-PLAN.md]
 
 2. **Should completion auto-print be tied to root-task completion or a derived graph transition?**
-   What we know: D-14 requires a one-time completion print, and the current repo has no run-level completion state or printed-summary marker. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md][VERIFIED: `rg -n "run complete|RunSummary|summary printed" internal cmd`]
-   What's unclear: The product artifacts do not yet define whether a run becomes “complete” when the root coordinator message is `done` or when the logical-work graph enters a terminal posture. [VERIFIED: internal/session/run.go][VERIFIED: internal/session/run_contracts.go][ASSUMED]
-   Recommendation: Prefer root-task `done` in Phase 5 planning because it is explicit, unique, and artifact-backed; if the planner rejects that, add a single shared pre/post edge detector rather than separate command-specific logic. [ASSUMED]
+   Resolution: Tie the one-time automatic print to the coordinator root message moving to `done`. That is the explicit Phase 5 integration decision encoded in `05-02-PLAN.md`, and it avoids inventing a second completion-state artifact. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md][VERIFIED: .planning/phases/05-run-summaries/05-02-PLAN.md]
 
 3. **Is `pending` only a bucket label, or a first-class derived status?**
-   What we know: `SUM-01`, the Phase 5 roadmap goal, and the phase boundary all mention pending work, while D-04 explicitly lists precedence only for `escalated`, `blocked`, `waiting`, `under_review`, and `completed`. [VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/ROADMAP.md][VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md]
-   What's unclear: Whether the planner should encode `pending` as the ordinary fallback status or merely as a display bucket label for unread/active items without another derived status. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md][ASSUMED]
-   Recommendation: Treat `pending` as the fallback display status for ordinary unread/active source work unless the product wants a different term. [ASSUMED]
+   Resolution: Treat `pending` as the fallback derived status for ordinary unread/active logical work that does not match a higher-precedence blocker or review rule. This keeps `SUM-01` aligned with the roadmap wording and the explicit status set defined in `05-01-PLAN.md`. [VERIFIED: .planning/ROADMAP.md][VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/phases/05-run-summaries/05-01-PLAN.md]
 
 ## Environment Availability
 
@@ -391,27 +385,28 @@ Source: `internal/protocol/coordinator.go` (abridged). [VERIFIED: internal/proto
 |----------|-------|
 | Framework | Go standard library `testing` package [VERIFIED: .planning/codebase/TESTING.md] |
 | Config file | none — repo uses `Makefile` targets and package-local tests [VERIFIED: .planning/codebase/TESTING.md][VERIFIED: Makefile] |
-| Quick run command | `go test ./internal/session -run 'TestRunShow.*|TestTaskDone.*|TestReviewRespond.*' -count=1` [VERIFIED: existing test file patterns in internal/session/*_test.go] |
+| Quick run command | `Use the task-specific command from the verification map for the file you just changed; keep commit-level sampling on focused summary tests rather than package-wide runs.` [RESOLVED: 05-VALIDATION.md] |
 | Full suite command | `go test ./... -count=1 -race` [VERIFIED: Makefile] |
 
 ### Phase Requirements → Test Map
 
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| SUM-01 | `run show` prints a compact run summary section that classifies logical work into completed/pending/waiting/blocked/under_review/escalated while keeping detail below it [VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md] | unit | `go test ./internal/session -run 'TestRunShowIncludesSummarySection|TestRunSummaryDerivesLogicalStatuses|TestRunSummaryCollapsesReroutedCurrentTask' -count=1` [ASSUMED] | ❌ Wave 0 [VERIFIED: internal/session/run_rebuild_test.go currently has no summary tests] |
-| SUM-02 | Each summary row shows the responsible/current owner plus task/message/review/blocker references for traceability [VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md] | unit + cmd | `go test ./internal/session -run 'TestRunSummaryIncludesOwnerAndReferences' -count=1 && go test ./cmd/tmuxicate -run 'TestRunShowRendersSummaryHeader|TestRootTaskDonePrintsRunSummaryOnce' -count=1` [ASSUMED] | ❌ Wave 0 [VERIFIED: `cmd/tmuxicate` currently has no tests][VERIFIED: internal/session/run_rebuild_test.go currently has no summary tests] |
+| SUM-01 | `run show` prints a compact run summary section that classifies logical work into completed/pending/waiting/blocked/under_review/escalated while keeping detail below it. [VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md] | unit + cmd | `rg -n "type RunSummary|type RunSummaryItem|type RunSummaryStatus|func BuildRunSummary|func FormatRunSummary|TestBuildRunSummaryDerivesStatusBucketsAndReferences|TestBuildRunSummaryCollapsesReviewAndRerouteArtifactsIntoSourceRows|TestFormatRunSummaryGroupsItemsWithoutTaskDetailSprawl" internal/session/run_summary.go internal/session/run_summary_test.go && rg -n "TestFormatRunGraphIncludesSummaryBeforeTaskDetails|TestRunShowCommandPrintsSummaryUnderHeader" internal/session/run_rebuild_test.go cmd/tmuxicate/main_test.go` for red-test creation tasks, then the focused `go test` commands from later plan tasks once implementation exists. [RESOLVED: 05-01-PLAN.md][RESOLVED: 05-02-PLAN.md] | ❌ Wave 0 [VERIFIED: internal/session/run_rebuild_test.go currently has no summary tests][VERIFIED: `cmd/tmuxicate` currently has no tests] |
+| SUM-02 | Each summary row shows the responsible/current owner plus task/message/review/blocker references for traceability. [VERIFIED: .planning/REQUIREMENTS.md][VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md] | unit + cmd | `go test ./internal/session -run 'TestBuildRunSummaryDerivesStatusBucketsAndReferences|TestBuildRunSummaryCollapsesReviewAndRerouteArtifactsIntoSourceRows' -count=1 && go test ./cmd/tmuxicate -run 'TestTaskDoneCommandPrintsSummaryOnlyForRootRunCompletion' -count=1` [RESOLVED: 05-01-PLAN.md][RESOLVED: 05-02-PLAN.md] | ❌ Wave 0 [VERIFIED: internal/session/run_rebuild_test.go currently has no summary tests][VERIFIED: `cmd/tmuxicate` currently has no tests] |
 
 ### Sampling Rate
 
-- **Per task commit:** `go test ./internal/session -run 'TestRunShow.*|TestTaskDone.*|TestReviewRespond.*' -count=1` [VERIFIED: existing summary-adjacent fixture/tests in internal/session]
+- **Per task commit:** Run the exact task-level command from the verification map entry for the task you just changed; red-test creation tasks use `rg` existence checks first, then later implementation tasks use focused `go test` commands. [RESOLVED: 05-VALIDATION.md]
 - **Per wave merge:** `go test ./... -count=1 -race` [VERIFIED: Makefile]
 - **Phase gate:** Full suite green plus operator-visible confirmation that `run show` still starts with `Run:` and that the completion print fires only on the chosen edge. [VERIFIED: cmd/tmuxicate/main.go][ASSUMED]
 
 ### Wave 0 Gaps
 
-- [ ] `internal/session/run_rebuild_test.go` — add summary-section, status-derivation, and descendant-collapse coverage for source-task rows. [VERIFIED: internal/session/run_rebuild_test.go]
-- [ ] `cmd/tmuxicate/main_test.go` — add Cobra execution tests for `run show` header/summary ordering and the one-time completion-print path. [VERIFIED: `rg -n "newRunShowCmd|newTaskDoneCmd|newReviewRespondCmd|newBlockerResolveCmd" cmd/tmuxicate/main.go`][ASSUMED]
-- [ ] Decide and encode fallback semantics for `pending`, `approved`, and `handoff_failed` before writing status-derivation helpers. [VERIFIED: .planning/phases/05-run-summaries/05-CONTEXT.md][ASSUMED]
+- [ ] `internal/session/run_summary_test.go` — add red tests for summary contracts, precedence, descendant folding, and grouped formatting. [RESOLVED: 05-01-PLAN.md]
+- [ ] `internal/session/run_rebuild_test.go` — add summary-ordering coverage for `FormatRunGraph`. [RESOLVED: 05-02-PLAN.md]
+- [ ] `cmd/tmuxicate/main_test.go` — add Cobra execution tests for `run show` header/summary ordering and root-only completion printing. [RESOLVED: 05-02-PLAN.md]
+- [x] Fallback semantics for `pending`, `approved`, and `handoff_failed` are now locked in the plans and no longer require discovery. [VERIFIED: .planning/phases/05-run-summaries/05-01-PLAN.md]
 - [ ] Install `golangci-lint`, `gofumpt`, and `goimports` locally if the phase requires exact `make ci` / `make fmt` verification. [VERIFIED: Makefile][VERIFIED: environment availability audit]
 
 ## Security Domain

@@ -89,8 +89,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Build coordinator-run summary aggregation
-- [ ] 05-02: Integrate summary output into operator-visible commands and verification
+- [ ] 05-01-PLAN.md — Build the derived run-summary read model over `RunGraph`
+- [ ] 05-02-PLAN.md — Wire the shared summary into `run show` and root completion output
 
 ## Progress
 
