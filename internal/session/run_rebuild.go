@@ -226,6 +226,9 @@ func FormatRunGraph(graph *RunGraph) string {
 	fmt.Fprintf(&builder, "Coordinator: %s\n", graph.Run.Coordinator)
 	fmt.Fprintf(&builder, "Goal: %s\n", graph.Run.Goal)
 	fmt.Fprintf(&builder, "Root Message: %s\n", graph.Run.RootMessageID)
+	if summary := FormatRunSummary(BuildRunSummary(graph)); strings.Contains(summary, "Summary:") {
+		builder.WriteString(summary)
+	}
 	for _, task := range graph.Tasks {
 		fmt.Fprintf(&builder, "\nTask: %s\n", task.Task.TaskID)
 		fmt.Fprintf(&builder, "Owner: %s\n", task.Task.Owner)

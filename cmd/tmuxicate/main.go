@@ -797,7 +797,7 @@ func newTaskDoneCmd() *cobra.Command {
 		Use:   "done <message-id>",
 		Short: "Mark a task as done",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			resolvedStateDir, err := resolveStateDir(configPath, stateDir)
 			if err != nil {
 				return err
@@ -810,7 +810,29 @@ func newTaskDoneCmd() *cobra.Command {
 			if err := session.TaskDone(resolvedStateDir, resolvedAgent, protocol.MessageID(args[0]), summary); err != nil {
 				return err
 			}
-			fmt.Println("done")
+
+			summaryOutput := ""
+			env, _, err := mailbox.NewStore(resolvedStateDir).ReadMessage(protocol.MessageID(args[0]))
+			if err != nil {
+				return fmt.Errorf("read completed task message: %w", err)
+			}
+			runID := strings.TrimSpace(env.Meta["run_id"])
+			rootMessageID := strings.TrimSpace(env.Meta["root_message_id"])
+			if runID != "" && rootMessageID == args[0] {
+				graph, err := session.LoadRunGraph(resolvedStateDir, protocol.RunID(runID))
+				if err != nil {
+					return err
+				}
+				summaryOutput = session.FormatRunSummary(session.BuildRunSummary(graph))
+			}
+
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "done"); err != nil {
+				return err
+			}
+			if summaryOutput != "" {
+				_, err = fmt.Fprint(cmd.OutOrStdout(), summaryOutput)
+				return err
+			}
 			return nil
 		},
 	}
