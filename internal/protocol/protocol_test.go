@@ -212,6 +212,7 @@ func TestBlockerResolutionActionValidate(t *testing.T) {
 
 	valid := []BlockerResolutionAction{
 		BlockerResolutionActionManualReroute,
+		BlockerResolutionActionPartialReplan,
 		BlockerResolutionActionClarify,
 		BlockerResolutionActionDismiss,
 	}
@@ -231,6 +232,91 @@ func TestBlockerResolutionActionValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("BlockerResolutionAction.Validate() expected error, got nil")
 	}
+}
+
+func TestPartialReplanValidateRequiresSourceBlockerAndReplacementLineage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
+		if err := replan.Validate(); err != nil {
+			t.Fatalf("PartialReplan.Validate() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("requires blocker source task to match source task", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
+		replan.BlockerSourceTaskID = NewTaskID(99)
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "blocker_source_task_id", "source_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want blocker_source_task_id/source_task_id failure", got)
+		}
+	})
+
+	t.Run("requires required lineage fields", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
+		replan.BlockerSourceTaskID = ""
+		replan.SupersededTaskID = ""
+		replan.ReplacementTaskID = ""
+		replan.Reason = ""
+		replan.Status = ""
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "blocker_source_task_id") ||
+			!containsAll(got, "superseded_task_id") ||
+			!containsAll(got, "replacement_task_id") ||
+			!containsAll(got, "reason") ||
+			!containsAll(got, "status") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want required-field failures", got)
+		}
+	})
+}
+
+func TestPartialReplanValidateRejectsRecursiveOrDuplicateReplacementLinks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("replacement must differ from source task", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
+		replan.ReplacementTaskID = replan.SourceTaskID
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "replacement_task_id", "source_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want replacement/source mismatch", got)
+		}
+	})
+
+	t.Run("replacement must differ from superseded task", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
+		replan.ReplacementTaskID = replan.SupersededTaskID
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "replacement_task_id", "superseded_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want replacement/superseded mismatch", got)
+		}
+	})
 }
 
 func validBlockerCase() *BlockerCase {
@@ -253,6 +339,27 @@ func validBlockerCase() *BlockerCase {
 		MaxReroutes:      1,
 		CreatedAt:        now,
 		UpdatedAt:        now,
+	}
+}
+
+func validPartialReplan() *PartialReplan {
+	now := time.Now().UTC()
+
+	return &PartialReplan{
+		RunID:               NewRunID(1),
+		SourceTaskID:        NewTaskID(1),
+		SourceMessageID:     NewMessageID(1),
+		BlockerSourceTaskID: NewTaskID(1),
+		SupersededTaskID:    NewTaskID(2),
+		SupersededMessageID: NewMessageID(2),
+		SupersededOwner:     AgentName("backend"),
+		ReplacementTaskID:   NewTaskID(3),
+		ReplacementMessageID: NewMessageID(3),
+		ReplacementOwner:    AgentName("frontend"),
+		Reason:              "split the blocked path into a bounded replacement",
+		Status:              PartialReplanStatusApplied,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 }
 

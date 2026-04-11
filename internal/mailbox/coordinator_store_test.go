@@ -110,6 +110,48 @@ func TestCoordinatorStoreFindBlockerCaseByCurrentTaskID(t *testing.T) {
 	}
 }
 
+func TestCoordinatorStorePartialReplanCRUDAndLookupByReplacementTask(t *testing.T) {
+	t.Parallel()
+
+	stateDir := t.TempDir()
+	store := NewCoordinatorStore(stateDir)
+	replan := testPartialReplan()
+
+	if err := store.CreatePartialReplan(replan); err != nil {
+		t.Fatalf("CreatePartialReplan() unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(RunPartialReplanPath(stateDir, replan.RunID, replan.SourceTaskID)); err != nil {
+		t.Fatalf("partial replan path missing: %v", err)
+	}
+
+	got, err := store.ReadPartialReplan(replan.RunID, replan.SourceTaskID)
+	if err != nil {
+		t.Fatalf("ReadPartialReplan() unexpected error: %v", err)
+	}
+	if got.SourceTaskID != replan.SourceTaskID {
+		t.Fatalf("SourceTaskID = %q, want %q", got.SourceTaskID, replan.SourceTaskID)
+	}
+	if got.ReplacementTaskID != replan.ReplacementTaskID {
+		t.Fatalf("ReplacementTaskID = %q, want %q", got.ReplacementTaskID, replan.ReplacementTaskID)
+	}
+
+	if err := os.MkdirAll(RunPartialReplansDir(stateDir, replan.RunID), 0o755); err != nil {
+		t.Fatalf("MkdirAll() unexpected error: %v", err)
+	}
+	if err := os.WriteFile(RunPartialReplansDir(stateDir, replan.RunID)+"/README.txt", []byte("ignore me\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() unexpected error: %v", err)
+	}
+
+	found, err := store.FindPartialReplanByReplacementTaskID(replan.RunID, replan.ReplacementTaskID)
+	if err != nil {
+		t.Fatalf("FindPartialReplanByReplacementTaskID() unexpected error: %v", err)
+	}
+	if found.SourceTaskID != replan.SourceTaskID {
+		t.Fatalf("SourceTaskID = %q, want %q", found.SourceTaskID, replan.SourceTaskID)
+	}
+}
+
 func testBlockerCase() *protocol.BlockerCase {
 	now := time.Now().UTC()
 
@@ -130,5 +172,26 @@ func testBlockerCase() *protocol.BlockerCase {
 		MaxReroutes:      1,
 		CreatedAt:        now,
 		UpdatedAt:        now,
+	}
+}
+
+func testPartialReplan() *protocol.PartialReplan {
+	now := time.Now().UTC()
+
+	return &protocol.PartialReplan{
+		RunID:                protocol.NewRunID(1),
+		SourceTaskID:         protocol.NewTaskID(1),
+		SourceMessageID:      protocol.NewMessageID(1),
+		BlockerSourceTaskID:  protocol.NewTaskID(1),
+		SupersededTaskID:     protocol.NewTaskID(2),
+		SupersededMessageID:  protocol.NewMessageID(2),
+		SupersededOwner:      protocol.AgentName("backend"),
+		ReplacementTaskID:    protocol.NewTaskID(3),
+		ReplacementMessageID: protocol.NewMessageID(3),
+		ReplacementOwner:     protocol.AgentName("frontend"),
+		Reason:               "bounded replacement",
+		Status:               protocol.PartialReplanStatusApplied,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 }
