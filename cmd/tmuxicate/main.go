@@ -382,6 +382,12 @@ func formatAdaptiveEvidence(evidence []protocol.AdaptiveRoutingEvidenceRef) stri
 
 func newRunShowCmd() *cobra.Command {
 	var configPath string
+	var timeline bool
+	var timelineOnly bool
+	var timelineOwner string
+	var timelineState string
+	var timelineClass string
+	var timelineTarget string
 
 	cmd := &cobra.Command{
 		Use:   "show <run-id>",
@@ -398,7 +404,26 @@ func newRunShowCmd() *cobra.Command {
 				return err
 			}
 
-			output := session.FormatRunGraph(graph)
+			filter := session.RunTimelineFilter{
+				Owner:           timelineOwner,
+				State:           timelineState,
+				TaskClass:       protocol.TaskClass(timelineClass),
+				ExecutionTarget: timelineTarget,
+			}
+			if timelineClass != "" {
+				if err := filter.TaskClass.Validate(); err != nil {
+					return fmt.Errorf("timeline-class: %w", err)
+				}
+			}
+
+			output, err := session.FormatRunGraphView(cfg.Session.StateDir, graph, session.RunGraphFormatOptions{
+				Timeline:       timeline,
+				TimelineOnly:   timelineOnly,
+				TimelineFilter: filter,
+			})
+			if err != nil {
+				return err
+			}
 			if !strings.HasPrefix(output, "Run: ") {
 				return fmt.Errorf("run show output must start with Run: header")
 			}
@@ -408,6 +433,12 @@ func newRunShowCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.Flags().BoolVar(&timeline, "timeline", false, "include the derived run timeline")
+	cmd.Flags().BoolVar(&timelineOnly, "timeline-only", false, "show only the run header, summary, and timeline")
+	cmd.Flags().StringVar(&timelineOwner, "timeline-owner", "", "filter timeline rows by owner")
+	cmd.Flags().StringVar(&timelineState, "timeline-state", "", "filter timeline rows by state")
+	cmd.Flags().StringVar(&timelineClass, "timeline-class", "", "filter timeline rows by task class")
+	cmd.Flags().StringVar(&timelineTarget, "timeline-target", "", "filter timeline rows by execution target")
 	return cmd
 }
 

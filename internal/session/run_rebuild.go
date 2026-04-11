@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/coyaSONG/tmuxicate/internal/mailbox"
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
@@ -32,6 +33,12 @@ type runMessageSummary struct {
 	Thread  protocol.ThreadID
 	Kind    protocol.Kind
 	ReplyTo *protocol.MessageID
+}
+
+type RunGraphFormatOptions struct {
+	Timeline       bool
+	TimelineOnly   bool
+	TimelineFilter RunTimelineFilter
 }
 
 func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
@@ -285,8 +292,13 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 }
 
 func FormatRunGraph(graph *RunGraph) string {
+	output, _ := FormatRunGraphView("", graph, RunGraphFormatOptions{})
+	return output
+}
+
+func FormatRunGraphView(stateDir string, graph *RunGraph, opts RunGraphFormatOptions) (string, error) {
 	if graph == nil {
-		return ""
+		return "", nil
 	}
 
 	var builder strings.Builder
@@ -296,6 +308,31 @@ func FormatRunGraph(graph *RunGraph) string {
 	fmt.Fprintf(&builder, "Root Message: %s\n", graph.Run.RootMessageID)
 	if summary := FormatRunSummary(BuildRunSummary(graph)); strings.Contains(summary, "Summary:") {
 		builder.WriteString(summary)
+	}
+	if timelineEnabled(opts) {
+		if strings.TrimSpace(stateDir) == "" {
+			return "", fmt.Errorf("state dir is required for timeline rendering")
+		}
+
+		timeline, err := BuildRunTimeline(stateDir, graph)
+		if err != nil {
+			return "", err
+		}
+		filtered := FilterRunTimeline(timeline, opts.TimelineFilter)
+		builder.WriteString("Timeline:\n")
+		if timelineFilterActive(opts.TimelineFilter) {
+			fmt.Fprintf(&builder, "Timeline Filters: %s\n", formatTimelineFilters(opts.TimelineFilter))
+		}
+		if len(filtered) == 0 {
+			builder.WriteString("- no timeline events matched\n")
+		} else {
+			for _, event := range filtered {
+				fmt.Fprintf(&builder, "- %s | kind=%s%s\n", event.Timestamp.Format(time.RFC3339), event.Kind, formatTimelineEventDetails(event))
+			}
+		}
+		if opts.TimelineOnly {
+			return builder.String(), nil
+		}
 	}
 	for _, task := range graph.Tasks {
 		fmt.Fprintf(&builder, "\nTask: %s\n", task.Task.TaskID)
@@ -388,7 +425,7 @@ func FormatRunGraph(graph *RunGraph) string {
 		}
 	}
 
-	return builder.String()
+	return builder.String(), nil
 }
 
 func formatPlacementCapabilities(capabilities []string) string {
@@ -397,6 +434,63 @@ func formatPlacementCapabilities(capabilities []string) string {
 	}
 
 	return strings.Join(capabilities, ", ")
+}
+
+func timelineEnabled(opts RunGraphFormatOptions) bool {
+	return opts.Timeline || opts.TimelineOnly || timelineFilterActive(opts.TimelineFilter)
+}
+
+func timelineFilterActive(filter RunTimelineFilter) bool {
+	return strings.TrimSpace(filter.Owner) != "" ||
+		strings.TrimSpace(filter.State) != "" ||
+		filter.TaskClass != "" ||
+		strings.TrimSpace(filter.ExecutionTarget) != ""
+}
+
+func formatTimelineFilters(filter RunTimelineFilter) string {
+	parts := make([]string, 0, 4)
+	if owner := strings.TrimSpace(filter.Owner); owner != "" {
+		parts = append(parts, fmt.Sprintf("owner=%s", owner))
+	}
+	if state := strings.TrimSpace(filter.State); state != "" {
+		parts = append(parts, fmt.Sprintf("state=%s", state))
+	}
+	if filter.TaskClass != "" {
+		parts = append(parts, fmt.Sprintf("class=%s", filter.TaskClass))
+	}
+	if target := strings.TrimSpace(filter.ExecutionTarget); target != "" {
+		parts = append(parts, fmt.Sprintf("target=%s", target))
+	}
+	return strings.Join(parts, " ")
+}
+
+func formatTimelineEventDetails(event RunTimelineEvent) string {
+	parts := make([]string, 0, 7)
+	if event.Owner != "" {
+		parts = append(parts, fmt.Sprintf("owner=%s", event.Owner))
+	}
+	if event.State != "" && event.State != "-" {
+		parts = append(parts, fmt.Sprintf("state=%s", event.State))
+	}
+	if event.TaskClass != "" {
+		parts = append(parts, fmt.Sprintf("class=%s", event.TaskClass))
+	}
+	if event.ExecutionTarget != "" {
+		parts = append(parts, fmt.Sprintf("target=%s", event.ExecutionTarget))
+	}
+	if event.TaskID != "" {
+		parts = append(parts, fmt.Sprintf("task=%s", event.TaskID))
+	}
+	if event.MessageID != "" {
+		parts = append(parts, fmt.Sprintf("msg=%s", event.MessageID))
+	}
+	if summary := strings.TrimSpace(event.Summary); summary != "" && summary != "-" {
+		parts = append(parts, summary)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " | " + strings.Join(parts, " | ")
 }
 
 func loadRunMessages(stateDir string) (map[protocol.MessageID]runMessageSummary, error) {
