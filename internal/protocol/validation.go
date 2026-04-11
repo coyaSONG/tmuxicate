@@ -465,6 +465,65 @@ func (b *BlockerCase) Validate() error {
 	return nil
 }
 
+func (p *PartialReplan) Validate() error {
+	if p == nil {
+		return errors.New("partial replan is required")
+	}
+	if !isGeneratedRunID(p.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if !isGeneratedTaskID(p.SourceTaskID) {
+		return errors.New("source_task_id must use generated task_ identifier")
+	}
+	if !isGeneratedMessageID(p.SourceMessageID) {
+		return errors.New("source_message_id must use generated msg_ identifier")
+	}
+	if !isGeneratedTaskID(p.BlockerSourceTaskID) {
+		return errors.New("blocker_source_task_id must use generated task_ identifier")
+	}
+	if p.BlockerSourceTaskID != p.SourceTaskID {
+		return errors.New("blocker_source_task_id must equal source_task_id")
+	}
+	if !isGeneratedTaskID(p.SupersededTaskID) {
+		return errors.New("superseded_task_id must use generated task_ identifier")
+	}
+	if !isGeneratedMessageID(p.SupersededMessageID) {
+		return errors.New("superseded_message_id must use generated msg_ identifier")
+	}
+	if strings.TrimSpace(string(p.SupersededOwner)) == "" {
+		return errors.New("superseded_owner is required")
+	}
+	if !isGeneratedTaskID(p.ReplacementTaskID) {
+		return errors.New("replacement_task_id must use generated task_ identifier")
+	}
+	if !isGeneratedMessageID(p.ReplacementMessageID) {
+		return errors.New("replacement_message_id must use generated msg_ identifier")
+	}
+	if p.ReplacementTaskID == p.SourceTaskID {
+		return errors.New("replacement_task_id must differ from source_task_id")
+	}
+	if p.ReplacementTaskID == p.SupersededTaskID {
+		return errors.New("replacement_task_id must differ from superseded_task_id")
+	}
+	if strings.TrimSpace(string(p.ReplacementOwner)) == "" {
+		return errors.New("replacement_owner is required")
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		return errors.New("reason is required")
+	}
+	if err := p.Status.Validate(); err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+	if p.CreatedAt.IsZero() {
+		return errors.New("created_at is required")
+	}
+	if p.UpdatedAt.IsZero() {
+		return errors.New("updated_at is required")
+	}
+
+	return nil
+}
+
 func (c TaskClass) Validate() error {
 	switch c {
 	case TaskClassImplementation, TaskClassResearch, TaskClassReview:
@@ -542,15 +601,25 @@ func (s BlockerStatus) Validate() error {
 
 func (a BlockerResolutionAction) Validate() error {
 	switch a {
-	case BlockerResolutionActionManualReroute, BlockerResolutionActionClarify, BlockerResolutionActionDismiss:
+	case BlockerResolutionActionManualReroute, BlockerResolutionActionPartialReplan, BlockerResolutionActionClarify, BlockerResolutionActionDismiss:
 		return nil
 	default:
 		return fmt.Errorf(
-			"must be one of %q, %q, or %q",
+			"must be one of %q, %q, %q, or %q",
 			BlockerResolutionActionManualReroute,
+			BlockerResolutionActionPartialReplan,
 			BlockerResolutionActionClarify,
 			BlockerResolutionActionDismiss,
 		)
+	}
+}
+
+func (s PartialReplanStatus) Validate() error {
+	switch s {
+	case PartialReplanStatusApplied:
+		return nil
+	default:
+		return fmt.Errorf("must be %q", PartialReplanStatusApplied)
 	}
 }
 
@@ -956,6 +1025,10 @@ func childTaskHasRoutingMetadata(task *ChildTask) bool {
 
 func isGeneratedTaskID(id TaskID) bool {
 	return isGeneratedIdentifier(string(id), "task_")
+}
+
+func isGeneratedMessageID(id MessageID) bool {
+	return isGeneratedIdentifier(string(id), "msg_")
 }
 
 func isGeneratedIdentifier(value string, prefix string) bool {

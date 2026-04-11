@@ -261,26 +261,78 @@ func TestPartialReplanValidateRequiresSourceBlockerAndReplacementLineage(t *test
 		}
 	})
 
-	t.Run("requires required lineage fields", func(t *testing.T) {
+	t.Run("requires blocker source task id", func(t *testing.T) {
 		t.Parallel()
 
 		replan := validPartialReplan()
 		replan.BlockerSourceTaskID = ""
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "blocker_source_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want blocker_source_task_id requirement", got)
+		}
+	})
+
+	t.Run("requires superseded task id", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
 		replan.SupersededTaskID = ""
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "superseded_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want superseded_task_id requirement", got)
+		}
+	})
+
+	t.Run("requires replacement task id", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
 		replan.ReplacementTaskID = ""
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "replacement_task_id") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want replacement_task_id requirement", got)
+		}
+	})
+
+	t.Run("requires reason", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
 		replan.Reason = ""
+
+		err := replan.Validate()
+		if err == nil {
+			t.Fatal("PartialReplan.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "reason") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want reason requirement", got)
+		}
+	})
+
+	t.Run("requires applied status", func(t *testing.T) {
+		t.Parallel()
+
+		replan := validPartialReplan()
 		replan.Status = ""
 
 		err := replan.Validate()
 		if err == nil {
 			t.Fatal("PartialReplan.Validate() expected error, got nil")
 		}
-		if got := err.Error(); !containsAll(got, "blocker_source_task_id") ||
-			!containsAll(got, "superseded_task_id") ||
-			!containsAll(got, "replacement_task_id") ||
-			!containsAll(got, "reason") ||
-			!containsAll(got, "status") {
-			t.Fatalf("PartialReplan.Validate() error = %q, want required-field failures", got)
+		if got := err.Error(); !containsAll(got, "status") {
+			t.Fatalf("PartialReplan.Validate() error = %q, want status requirement", got)
 		}
 	})
 }
@@ -346,20 +398,20 @@ func validPartialReplan() *PartialReplan {
 	now := time.Now().UTC()
 
 	return &PartialReplan{
-		RunID:               NewRunID(1),
-		SourceTaskID:        NewTaskID(1),
-		SourceMessageID:     NewMessageID(1),
-		BlockerSourceTaskID: NewTaskID(1),
-		SupersededTaskID:    NewTaskID(2),
-		SupersededMessageID: NewMessageID(2),
-		SupersededOwner:     AgentName("backend"),
-		ReplacementTaskID:   NewTaskID(3),
+		RunID:                NewRunID(1),
+		SourceTaskID:         NewTaskID(1),
+		SourceMessageID:      NewMessageID(1),
+		BlockerSourceTaskID:  NewTaskID(1),
+		SupersededTaskID:     NewTaskID(2),
+		SupersededMessageID:  NewMessageID(2),
+		SupersededOwner:      AgentName("backend"),
+		ReplacementTaskID:    NewTaskID(3),
 		ReplacementMessageID: NewMessageID(3),
-		ReplacementOwner:    AgentName("frontend"),
-		Reason:              "split the blocked path into a bounded replacement",
-		Status:              PartialReplanStatusApplied,
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		ReplacementOwner:     AgentName("frontend"),
+		Reason:               "split the blocked path into a bounded replacement",
+		Status:               PartialReplanStatusApplied,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 }
 

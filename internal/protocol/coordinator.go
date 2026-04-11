@@ -69,8 +69,15 @@ type BlockerResolutionAction string
 
 const (
 	BlockerResolutionActionManualReroute BlockerResolutionAction = "manual_reroute"
+	BlockerResolutionActionPartialReplan BlockerResolutionAction = "partial_replan"
 	BlockerResolutionActionClarify       BlockerResolutionAction = "clarify"
 	BlockerResolutionActionDismiss       BlockerResolutionAction = "dismiss"
+)
+
+type PartialReplanStatus string
+
+const (
+	PartialReplanStatusApplied PartialReplanStatus = "applied"
 )
 
 type AgentSnapshot struct {
@@ -180,6 +187,23 @@ type BlockerCase struct {
 	Attempts          []BlockerAttempt   `yaml:"attempts,omitempty"`
 }
 
+type PartialReplan struct {
+	RunID                RunID               `yaml:"run_id"`
+	SourceTaskID         TaskID              `yaml:"source_task_id"`
+	SourceMessageID      MessageID           `yaml:"source_message_id"`
+	BlockerSourceTaskID  TaskID              `yaml:"blocker_source_task_id"`
+	SupersededTaskID     TaskID              `yaml:"superseded_task_id"`
+	SupersededMessageID  MessageID           `yaml:"superseded_message_id"`
+	SupersededOwner      AgentName           `yaml:"superseded_owner"`
+	ReplacementTaskID    TaskID              `yaml:"replacement_task_id"`
+	ReplacementMessageID MessageID           `yaml:"replacement_message_id"`
+	ReplacementOwner     AgentName           `yaml:"replacement_owner"`
+	Reason               string              `yaml:"reason"`
+	Status               PartialReplanStatus `yaml:"status"`
+	CreatedAt            time.Time           `yaml:"created_at"`
+	UpdatedAt            time.Time           `yaml:"updated_at"`
+}
+
 type RouteChildTaskRequest struct {
 	RunID          RunID     `yaml:"run_id"`
 	TaskClass      TaskClass `yaml:"task_class"`
@@ -192,42 +216,42 @@ type RouteChildTaskRequest struct {
 }
 
 type RoutingDecision struct {
-	Status          string      `yaml:"status"`
-	SelectedOwner   AgentName   `yaml:"selected_owner,omitempty"`
-	Candidates      []AgentName `yaml:"candidates,omitempty"`
-	TieBreak        string      `yaml:"tie_break,omitempty"`
-	DuplicateStatus string      `yaml:"duplicate_status,omitempty"`
-	MatchedTaskID   TaskID      `yaml:"matched_task_id,omitempty"`
-	Suggestions     []string    `yaml:"suggestions,omitempty"`
+	Status          string                      `yaml:"status"`
+	SelectedOwner   AgentName                   `yaml:"selected_owner,omitempty"`
+	Candidates      []AgentName                 `yaml:"candidates,omitempty"`
+	TieBreak        string                      `yaml:"tie_break,omitempty"`
+	DuplicateStatus string                      `yaml:"duplicate_status,omitempty"`
+	MatchedTaskID   TaskID                      `yaml:"matched_task_id,omitempty"`
+	Suggestions     []string                    `yaml:"suggestions,omitempty"`
 	Adaptive        *AdaptiveRoutingExplanation `yaml:"adaptive,omitempty"`
 }
 
 type AdaptiveRoutingExplanation struct {
-	Applied         bool                        `yaml:"applied"`
-	BaselineOwner   AgentName                   `yaml:"baseline_owner,omitempty"`
-	PreferredOwner  AgentName                   `yaml:"preferred_owner,omitempty"`
-	HistoricalScore int                         `yaml:"historical_score"`
-	ManualWeight    int                         `yaml:"manual_weight"`
-	TotalScore      int                         `yaml:"total_score"`
-	Reason          string                      `yaml:"reason,omitempty"`
+	Applied         bool                         `yaml:"applied"`
+	BaselineOwner   AgentName                    `yaml:"baseline_owner,omitempty"`
+	PreferredOwner  AgentName                    `yaml:"preferred_owner,omitempty"`
+	HistoricalScore int                          `yaml:"historical_score"`
+	ManualWeight    int                          `yaml:"manual_weight"`
+	TotalScore      int                          `yaml:"total_score"`
+	Reason          string                       `yaml:"reason,omitempty"`
 	Evidence        []AdaptiveRoutingEvidenceRef `yaml:"evidence,omitempty"`
 }
 
 type AdaptiveRoutingPreferenceSet struct {
-	Coordinator  AgentName                  `yaml:"coordinator"`
-	UpdatedAt    time.Time                  `yaml:"updated_at"`
-	LookbackRuns int                        `yaml:"lookback_runs"`
+	Coordinator  AgentName                   `yaml:"coordinator"`
+	UpdatedAt    time.Time                   `yaml:"updated_at"`
+	LookbackRuns int                         `yaml:"lookback_runs"`
 	Preferences  []AdaptiveRoutingPreference `yaml:"preferences"`
 }
 
 type AdaptiveRoutingPreference struct {
-	PreferenceKey     string                      `yaml:"preference_key"`
-	TaskClass         TaskClass                   `yaml:"task_class"`
-	NormalizedDomains []string                    `yaml:"normalized_domains"`
-	PreferredOwner    AgentName                   `yaml:"preferred_owner"`
-	HistoricalScore   int                         `yaml:"historical_score"`
-	ManualWeight      int                         `yaml:"manual_weight"`
-	TotalScore        int                         `yaml:"total_score"`
+	PreferenceKey     string                       `yaml:"preference_key"`
+	TaskClass         TaskClass                    `yaml:"task_class"`
+	NormalizedDomains []string                     `yaml:"normalized_domains"`
+	PreferredOwner    AgentName                    `yaml:"preferred_owner"`
+	HistoricalScore   int                          `yaml:"historical_score"`
+	ManualWeight      int                          `yaml:"manual_weight"`
+	TotalScore        int                          `yaml:"total_score"`
 	Evidence          []AdaptiveRoutingEvidenceRef `yaml:"evidence,omitempty"`
 }
 

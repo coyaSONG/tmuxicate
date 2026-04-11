@@ -18,6 +18,7 @@ const (
 	tasksDirName       = "tasks"
 	reviewsDirName     = "reviews"
 	blockersDirName    = "blockers"
+	replansDirName     = "replans"
 	preferencesDirName = "preferences"
 	adaptiveDirName    = "adaptive-routing"
 )
@@ -136,6 +137,14 @@ func RunBlockersDir(stateDir string, runID protocol.RunID) string {
 
 func RunBlockerCasePath(stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID) string {
 	return filepath.Join(RunBlockersDir(stateDir, runID), fmt.Sprintf("%s.yaml", sourceTaskID))
+}
+
+func RunPartialReplansDir(stateDir string, runID protocol.RunID) string {
+	return filepath.Join(RunDir(stateDir, runID), replansDirName)
+}
+
+func RunPartialReplanPath(stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID) string {
+	return filepath.Join(RunPartialReplansDir(stateDir, runID), fmt.Sprintf("%s.yaml", sourceTaskID))
 }
 
 func RunLocksDir(stateDir string, runID protocol.RunID) string {

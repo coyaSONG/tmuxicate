@@ -183,6 +183,24 @@ func (s *CoordinatorStore) CreateBlockerCase(caseDoc *protocol.BlockerCase) erro
 	return s.writeBlockerCase(path, caseDoc)
 }
 
+func (s *CoordinatorStore) CreatePartialReplan(replan *protocol.PartialReplan) error {
+	if replan == nil {
+		return errors.New("partial replan is required")
+	}
+	if err := replan.Validate(); err != nil {
+		return fmt.Errorf("validate partial replan: %w", err)
+	}
+
+	path := RunPartialReplanPath(s.stateDir, replan.RunID, replan.SourceTaskID)
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("partial replan for %s already exists", replan.SourceTaskID)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat partial replan: %w", err)
+	}
+
+	return s.writePartialReplan(path, replan)
+}
+
 func (s *CoordinatorStore) ReadBlockerCase(runID protocol.RunID, sourceTaskID protocol.TaskID) (*protocol.BlockerCase, error) {
 	data, err := os.ReadFile(RunBlockerCasePath(s.stateDir, runID, sourceTaskID))
 	if err != nil {
@@ -204,6 +222,29 @@ func (s *CoordinatorStore) ReadBlockerCase(runID protocol.RunID, sourceTaskID pr
 	}
 
 	return &caseDoc, nil
+}
+
+func (s *CoordinatorStore) ReadPartialReplan(runID protocol.RunID, sourceTaskID protocol.TaskID) (*protocol.PartialReplan, error) {
+	data, err := os.ReadFile(RunPartialReplanPath(s.stateDir, runID, sourceTaskID))
+	if err != nil {
+		return nil, fmt.Errorf("read partial replan: %w", err)
+	}
+
+	var replan protocol.PartialReplan
+	if err := yaml.Unmarshal(data, &replan); err != nil {
+		return nil, fmt.Errorf("unmarshal partial replan: %w", err)
+	}
+	if err := replan.Validate(); err != nil {
+		return nil, fmt.Errorf("validate partial replan: %w", err)
+	}
+	if replan.RunID != runID {
+		return nil, fmt.Errorf("validate partial replan: run_id %s does not match path", replan.RunID)
+	}
+	if replan.SourceTaskID != sourceTaskID {
+		return nil, fmt.Errorf("validate partial replan: source_task_id %s does not match path", replan.SourceTaskID)
+	}
+
+	return &replan, nil
 }
 
 func (s *CoordinatorStore) UpdateBlockerCase(runID protocol.RunID, sourceTaskID protocol.TaskID, updateFn func(*protocol.BlockerCase) error) error {
@@ -267,6 +308,46 @@ func (s *CoordinatorStore) FindBlockerCaseByCurrentTaskID(runID protocol.RunID, 
 
 	if matched == nil {
 		return nil, fmt.Errorf("blocker case for current task %s: %w", currentTaskID, os.ErrNotExist)
+	}
+
+	return matched, nil
+}
+
+func (s *CoordinatorStore) FindPartialReplanByReplacementTaskID(runID protocol.RunID, replacementTaskID protocol.TaskID) (*protocol.PartialReplan, error) {
+	if replacementTaskID == "" {
+		return nil, errors.New("replacementTaskID is required")
+	}
+
+	entries, err := os.ReadDir(RunPartialReplansDir(s.stateDir, runID))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("partial replan for replacement task %s: %w", replacementTaskID, os.ErrNotExist)
+		}
+		return nil, fmt.Errorf("read partial replans: %w", err)
+	}
+
+	var matched *protocol.PartialReplan
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		replan, err := s.ReadPartialReplan(runID, sourceTaskID)
+		if err != nil {
+			return nil, err
+		}
+		if replan.ReplacementTaskID != replacementTaskID {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("multiple partial replans found for replacement task %s", replacementTaskID)
+		}
+		matched = replan
+	}
+
+	if matched == nil {
+		return nil, fmt.Errorf("partial replan for replacement task %s: %w", replacementTaskID, os.ErrNotExist)
 	}
 
 	return matched, nil
@@ -372,6 +453,22 @@ func (s *CoordinatorStore) writeBlockerCase(path string, caseDoc *protocol.Block
 	}
 	if err := writeFileAtomically(path, data, 0o644); err != nil {
 		return fmt.Errorf("write blocker case: %w", err)
+	}
+
+	return nil
+}
+
+func (s *CoordinatorStore) writePartialReplan(path string, replan *protocol.PartialReplan) error {
+	if err := ensureDir(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(replan)
+	if err != nil {
+		return fmt.Errorf("marshal partial replan: %w", err)
+	}
+	if err := writeFileAtomically(path, data, 0o644); err != nil {
+		return fmt.Errorf("write partial replan: %w", err)
 	}
 
 	return nil
