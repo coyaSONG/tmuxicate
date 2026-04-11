@@ -88,6 +88,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	for i := range d.cfg.Agents {
 		agentCfg := &d.cfg.Agents[i]
+		if !isPaneManagedAgent(d.cfg, agentCfg) {
+			continue
+		}
 		dir := mailbox.InboxDir(d.stateDir, agentCfg.Name, protocol.FolderStateUnread)
 		if err := d.watcher.Add(dir); err != nil {
 			return fmt.Errorf("watch unread dir for %s: %w", agentCfg.Name, err)
@@ -153,6 +156,9 @@ func (d *Daemon) buildAdapters() map[string]adapter.Adapter {
 
 	for i := range d.cfg.Agents {
 		agentCfg := &d.cfg.Agents[i]
+		if !isPaneManagedAgent(d.cfg, agentCfg) {
+			continue
+		}
 		paneID := paneIDs[agentCfg.Name]
 		if paneID == "" {
 			continue
@@ -207,6 +213,9 @@ func (d *Daemon) handleFSEvent(ctx context.Context, ev fsnotify.Event) error {
 func (d *Daemon) fullSweep(ctx context.Context) error {
 	for i := range d.cfg.Agents {
 		agentCfg := &d.cfg.Agents[i]
+		if !isPaneManagedAgent(d.cfg, agentCfg) {
+			continue
+		}
 		dir := mailbox.InboxDir(d.stateDir, agentCfg.Name, protocol.FolderStateUnread)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -252,6 +261,10 @@ func (d *Daemon) tryNotify(ctx context.Context, agentName string, msgID protocol
 	env, _, err := d.store.ReadMessage(msgID)
 	if err != nil {
 		return err
+	}
+
+	if !isPaneManagedAgentName(d.cfg, agentName) {
+		return nil
 	}
 
 	agentAdapter := d.adapters[agentName]
@@ -445,4 +458,38 @@ func extractMessageID(name string) string {
 		return base[idx+1:]
 	}
 	return base
+}
+
+func isPaneManagedAgentName(cfg *config.ResolvedConfig, agentName string) bool {
+	if cfg == nil {
+		return false
+	}
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Name == agentName {
+			return isPaneManagedAgent(cfg, &cfg.Agents[i])
+		}
+	}
+
+	return false
+}
+
+func isPaneManagedAgent(cfg *config.ResolvedConfig, agent *config.AgentConfig) bool {
+	if cfg == nil || agent == nil {
+		return false
+	}
+
+	targetName := strings.TrimSpace(agent.ExecutionTarget)
+	if targetName == "" {
+		return true
+	}
+
+	for _, target := range cfg.ExecutionTargets {
+		if target.Name != targetName {
+			continue
+		}
+
+		return target.Kind == "local" && target.PaneBacked
+	}
+
+	return false
 }

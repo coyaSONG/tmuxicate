@@ -16,6 +16,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var startBackgroundDaemonFn = startBackgroundDaemon
+
 func Up(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 	if cfg == nil {
 		return fmt.Errorf("config is required")
@@ -34,6 +36,14 @@ func Up(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 		return err
 	}
 
+	paneAgents, err := paneManagedAgents(cfg)
+	if err != nil {
+		return err
+	}
+	if len(paneAgents) == 0 {
+		return fmt.Errorf("no local pane-backed agent configured for tmux session startup")
+	}
+
 	exists, err := tmuxClient.HasSession(backgroundCtx(), cfg.Session.Name)
 	if err != nil {
 		return fmt.Errorf("check existing session: %w", err)
@@ -42,24 +52,24 @@ func Up(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 		return fmt.Errorf("tmux session %q already exists", cfg.Session.Name)
 	}
 
-	paneIDs, err := startPanes(cfg, tmuxClient)
+	paneIDs, err := startPanes(cfg, tmuxClient, paneAgents)
 	if err != nil {
 		return err
 	}
 
-	if err := applyPaneMetadata(cfg, tmuxClient, paneIDs); err != nil {
+	if err := applyPaneMetadata(cfg, tmuxClient, paneAgents, paneIDs); err != nil {
 		return err
 	}
 	if err := applyLayout(cfg, tmuxClient); err != nil {
 		return err
 	}
-	if err := enableTranscripts(cfg, tmuxClient, paneIDs); err != nil {
+	if err := enableTranscripts(cfg, tmuxClient, paneAgents, paneIDs); err != nil {
 		return err
 	}
 	if err := writeReadyFile(cfg, paneIDs); err != nil {
 		return err
 	}
-	if err := startBackgroundDaemon(cfg); err != nil {
+	if err := startBackgroundDaemonFn(cfg); err != nil {
 		return err
 	}
 
@@ -142,13 +152,13 @@ func generateAgentArtifacts(cfg *config.ResolvedConfig) error {
 	return nil
 }
 
-func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client) (map[string]string, error) {
-	paneIDs := make(map[string]string, len(cfg.Agents))
+func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneAgents []*config.AgentConfig) (map[string]string, error) {
+	paneIDs := make(map[string]string, len(paneAgents))
 
-	mainAgent := &cfg.Agents[0]
-	for i := range cfg.Agents {
-		if cfg.Agents[i].Pane.Slot == "main" {
-			mainAgent = &cfg.Agents[i]
+	mainAgent := paneAgents[0]
+	for _, agent := range paneAgents {
+		if agent.Pane.Slot == "main" {
+			mainAgent = agent
 			break
 		}
 	}
@@ -166,11 +176,11 @@ func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client) (map[string]
 	paneIDs[mainAgent.Name] = mainPaneID
 
 	if cfg.Session.Layout == "triad" {
-		if err := startTriadPanes(cfg, tmuxClient, paneIDs, mainAgent.Name, mainPaneID); err != nil {
+		if err := startTriadPanes(cfg, tmuxClient, paneAgents, paneIDs, mainAgent.Name, mainPaneID); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := startDefaultPanes(cfg, tmuxClient, paneIDs, mainAgent.Name, mainPaneID); err != nil {
+		if err := startDefaultPanes(cfg, tmuxClient, paneAgents, paneIDs, mainAgent.Name, mainPaneID); err != nil {
 			return nil, err
 		}
 	}
@@ -178,10 +188,9 @@ func startPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client) (map[string]
 	return paneIDs, nil
 }
 
-func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
+func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneAgents []*config.AgentConfig, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
 	rightTopPaneID := ""
-	for i := range cfg.Agents {
-		agent := &cfg.Agents[i]
+	for _, agent := range paneAgents {
 		if agent.Name == mainAgentName {
 			continue
 		}
@@ -230,9 +239,8 @@ func startTriadPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs
 	return nil
 }
 
-func startDefaultPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
-	for i := range cfg.Agents {
-		agent := &cfg.Agents[i]
+func startDefaultPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneAgents []*config.AgentConfig, paneIDs map[string]string, mainAgentName, mainPaneID string) error {
+	for _, agent := range paneAgents {
 		if agent.Name == mainAgentName {
 			continue
 		}
@@ -253,7 +261,7 @@ func startDefaultPanes(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneI
 	return nil
 }
 
-func applyPaneMetadata(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string) error {
+func applyPaneMetadata(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneAgents []*config.AgentConfig, paneIDs map[string]string) error {
 	windowTarget := fmt.Sprintf("%s:%s", cfg.Session.Name, cfg.Session.WindowName)
 	if err := tmuxClient.SetSessionOption(backgroundCtx(), cfg.Session.Name, "@tmuxicate-state-dir", cfg.Session.StateDir); err != nil {
 		return fmt.Errorf("set session option: %w", err)
@@ -262,8 +270,7 @@ func applyPaneMetadata(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneI
 		return fmt.Errorf("set session window option: %w", err)
 	}
 
-	for i := range cfg.Agents {
-		agent := &cfg.Agents[i]
+	for _, agent := range paneAgents {
 		paneID := paneIDs[agent.Name]
 		if err := tmuxClient.SetPaneTitle(backgroundCtx(), paneID, fmt.Sprintf("%s(%s)", agent.Name, agent.Alias)); err != nil {
 			return fmt.Errorf("set pane title for %s: %w", agent.Name, err)
@@ -302,9 +309,8 @@ func applyLayout(cfg *config.ResolvedConfig, tmuxClient tmux.Client) error {
 	return nil
 }
 
-func enableTranscripts(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneIDs map[string]string) error {
-	for i := range cfg.Agents {
-		agent := &cfg.Agents[i]
+func enableTranscripts(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneAgents []*config.AgentConfig, paneIDs map[string]string) error {
+	for _, agent := range paneAgents {
 		transcriptPath := filepath.Join(mailbox.AgentDir(cfg.Session.StateDir, agent.Name), "transcripts", "raw.ansi.log")
 		if err := os.WriteFile(transcriptPath, []byte{}, 0o644); err != nil {
 			return fmt.Errorf("create transcript file for %s: %w", agent.Name, err)
@@ -316,6 +322,25 @@ func enableTranscripts(cfg *config.ResolvedConfig, tmuxClient tmux.Client, paneI
 	}
 
 	return nil
+}
+
+func paneManagedAgents(cfg *config.ResolvedConfig) ([]*config.AgentConfig, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config is required")
+	}
+
+	managed := make([]*config.AgentConfig, 0, len(cfg.Agents))
+	for i := range cfg.Agents {
+		target, err := resolveExecutionTarget(cfg, &cfg.Agents[i])
+		if err != nil {
+			return nil, err
+		}
+		if target.Kind == "local" && target.PaneBacked {
+			managed = append(managed, &cfg.Agents[i])
+		}
+	}
+
+	return managed, nil
 }
 
 func writeReadyFile(cfg *config.ResolvedConfig, paneIDs map[string]string) error {
