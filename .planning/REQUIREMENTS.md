@@ -22,8 +22,8 @@
 
 ### Operator Visibility
 
-- [ ] **OBS-01**: Operator can view a per-run timeline of task creation, routing, review, blocker, and resolution events
-- [ ] **OBS-02**: Operator can filter run views by owner, state, task class, and execution target without transcript review
+- [x] **OBS-01**: Operator can view a per-run timeline of task creation, routing, review, blocker, and resolution events
+- [x] **OBS-02**: Operator can filter run views by owner, state, task class, and execution target without transcript review
 
 ## v2 Requirements
 
@@ -56,8 +56,8 @@
 | REPLAN-02 | Phase 7 | Complete |
 | EXEC-01 | Phase 8 | Complete |
 | EXEC-02 | Phase 8 | Complete |
-| OBS-01 | Phase 9 | Pending |
-| OBS-02 | Phase 9 | Pending |
+| OBS-01 | Phase 9 | Complete |
+| OBS-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 8 total

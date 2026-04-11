@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Adaptive Coordination
-current_phase: 08
-current_phase_name: remote-execution-targets
+current_phase: 09
+current_phase_name: run-timeline-views
 current_plan: 2
-status: verifying
-stopped_at: Completed Phase 08 remote-execution-targets
-last_updated: "2026-04-11T11:13:27.541Z"
+status: complete
+stopped_at: Completed Phase 09 run-timeline-views
+last_updated: "2026-04-11T11:26:16.577Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -24,28 +24,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 08 Remote Execution Targets is complete; Phase 09 Run Timeline Views is next
+**Current focus:** Phase 09 Run Timeline Views is complete; v1.1 Adaptive Coordination is ready for milestone wrap-up
 
 ## Current Position
 
-Phase: 08 (remote-execution-targets) — COMPLETE
-Current Phase: 08
-Current Phase Name: remote-execution-targets
+Phase: 09 (run-timeline-views) — COMPLETE
+Current Phase: 09
+Current Phase Name: run-timeline-views
 Plan: 2 of 2 (complete)
 Current Plan: 2
 Total Plans in Phase: 2
 Total Phases: 4
-Status: Phase complete — ready for verification
+Status: Phase complete
 Last activity: 2026-04-11
-Last Activity Description: Phase 08 Remote Execution Targets completed with durable placement metadata, dry-run previews, and mixed local/non-local runtime boundaries
+Last Activity Description: Phase 09 Run Timeline Views completed with a strict timeline read model and filtered `run show` output
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 18
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -58,11 +58,15 @@ Progress: [████████░░] 75%
 | 03 | 2 | - | - |
 | 04 | 3 | - | - |
 | 05 | 2 | - | - |
+| 06 | 2 | 8m | 4m |
+| 07 | 2 | 6m | 3m |
+| 08 | 2 | 8m | 4m |
+| 09 | 2 | 8m | 4m |
 
 **Recent Trend:**
 
-- Last 5 plans: 14min, 1h, 1h, 4min, 4min
-- Trend: Stable
+- Last 5 plans: 4min, 2min, 4min, 5min, 3min
+- Trend: Faster terminal plan execution
 
 | Phase 01 P03 | 8min | 2 tasks | 3 files |
 | Phase 02 P01 | 9min | 2 tasks | 12 files |
@@ -75,6 +79,8 @@ Progress: [████████░░] 75%
 | Phase 07 P02 | 4min | 3 tasks | 8 files |
 | Phase 08 P01 | 4m | 3 tasks | 8 files |
 | Phase 08 P02 | 4m | 3 tasks | 9 files |
+| Phase 09 P01 | 5m | 2 tasks | 2 files |
+| Phase 09 P02 | 3m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -109,6 +115,10 @@ Recent decisions affecting current work:
 - [Phase 07]: run show and run summaries rebuild partial replan lineage from disk and fail loudly on blocker/replan link drift.
 - [Phase 08]: Implicit local placement is synthesized as explicit target metadata; owner-derived placement remains the only selection path in 08-01.
 - [Phase 08]: Dry-run preview shares route selection with persisted routing, and only pane-backed local agents participate in tmux lifecycle and daemon notifications.
+- [Phase 09]: Timeline rebuild validates TaskEvent ownership and thread linkage against canonical run artifacts before rendering.
+- [Phase 09]: Timeline filters derive owner, state, class, and target fields strictly from durable task metadata with a stable local fallback.
+- [Phase 09]: Run show remains the canonical inspection surface; timeline rendering is additive and timeline-only reuses the same formatter path.
+- [Phase 09]: Any timeline filter flag implies timeline mode so operators can narrow output without adding a second reporting command.
 
 ### Pending Todos
 
@@ -120,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T11:13:27.538Z
-Stopped at: Completed Phase 08 remote-execution-targets
+Last session: 2026-04-11T11:26:16.575Z
+Stopped at: Completed Phase 09 run-timeline-views
 Resume file: None
