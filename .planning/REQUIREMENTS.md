@@ -17,8 +17,8 @@
 
 ### Execution Targets
 
-- [ ] **EXEC-01**: Coordinator can dispatch child tasks to remote or sandboxed worker targets in addition to local `tmux` panes
-- [ ] **EXEC-02**: Operator can inspect execution target capabilities and task placement before coordinator dispatch commits work
+- [x] **EXEC-01**: Coordinator can dispatch child tasks to remote or sandboxed worker targets in addition to local `tmux` panes
+- [x] **EXEC-02**: Operator can inspect execution target capabilities and task placement before coordinator dispatch commits work
 
 ### Operator Visibility
 
@@ -54,8 +54,8 @@
 | ADAPT-02 | Phase 6 | Complete |
 | REPLAN-01 | Phase 7 | Complete |
 | REPLAN-02 | Phase 7 | Complete |
-| EXEC-01 | Phase 8 | Pending |
-| EXEC-02 | Phase 8 | Pending |
+| EXEC-01 | Phase 8 | Complete |
+| EXEC-02 | Phase 8 | Complete |
 | OBS-01 | Phase 9 | Pending |
 | OBS-02 | Phase 9 | Pending |
 

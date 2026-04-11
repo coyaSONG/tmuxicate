@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Adaptive Coordination
 current_phase: 08
 current_phase_name: remote-execution-targets
-current_plan: Not started
-status: ready
-stopped_at: Completed Phase 07 partial-replanning-flow
-last_updated: "2026-04-11T10:46:53.686Z"
+current_plan: 2
+status: verifying
+stopped_at: Completed Phase 08 remote-execution-targets
+last_updated: "2026-04-11T11:13:27.541Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 4
-  percent: 50
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -24,22 +24,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 07 is complete; Phase 08 Remote Execution Targets is next
+**Current focus:** Phase 08 Remote Execution Targets is complete; Phase 09 Run Timeline Views is next
 
 ## Current Position
 
-Phase: 08 (remote-execution-targets) — NOT STARTED
+Phase: 08 (remote-execution-targets) — COMPLETE
 Current Phase: 08
 Current Phase Name: remote-execution-targets
-Plan: —
-Current Plan: Not started
+Plan: 2 of 2 (complete)
+Current Plan: 2
 Total Plans in Phase: 2
 Total Phases: 4
-Status: Ready to discuss Phase 08 for milestone v1.1 Adaptive Coordination
+Status: Phase complete — ready for verification
 Last activity: 2026-04-11
-Last Activity Description: Phase 07 Partial Replanning Flow completed with bounded partial replan artifacts, execution, and run-show lineage
+Last Activity Description: Phase 08 Remote Execution Targets completed with durable placement metadata, dry-run previews, and mixed local/non-local runtime boundaries
 
-Progress: [█████-----] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -73,6 +73,8 @@ Progress: [█████-----] 50%
 | Phase 06 P02 | 4min | 2 tasks | 7 files |
 | Phase 07 P01 | 2min | 2 tasks | 6 files |
 | Phase 07 P02 | 4min | 3 tasks | 8 files |
+| Phase 08 P01 | 4m | 3 tasks | 8 files |
+| Phase 08 P02 | 4m | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -105,6 +107,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Partial replans are durable source-task keyed artifacts with one superseded task and one replacement task.
 - [Phase 07]: partial_replan only runs from escalated blocker cases and still creates replacement work through RouteChildTask guardrails.
 - [Phase 07]: run show and run summaries rebuild partial replan lineage from disk and fail loudly on blocker/replan link drift.
+- [Phase 08]: Implicit local placement is synthesized as explicit target metadata; owner-derived placement remains the only selection path in 08-01.
+- [Phase 08]: Dry-run preview shares route selection with persisted routing, and only pane-backed local agents participate in tmux lifecycle and daemon notifications.
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T10:46:53.684Z
-Stopped at: Completed Phase 07 partial-replanning-flow
+Last session: 2026-04-11T11:13:27.538Z
+Stopped at: Completed Phase 08 remote-execution-targets
 Resume file: None

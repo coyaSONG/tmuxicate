@@ -13,7 +13,7 @@ This milestone builds on the shipped coordinator workflow foundation by making c
 
 - [x] **Phase 6: Adaptive Routing Signals** - Persist adaptive routing inputs and explain why routed work went to a specific owner
 - [x] **Phase 7: Partial Replanning Flow** - Add bounded task replacement and lineage-preserving partial replans for blocked work
-- [ ] **Phase 8: Remote Execution Targets** - Extend dispatch and operator controls to remote or sandboxed worker targets
+- [x] **Phase 8: Remote Execution Targets** - Extend dispatch and operator controls to remote or sandboxed worker targets (completed 2026-04-11)
 - [ ] **Phase 9: Run Timeline Views** - Add per-run timelines and filtering for operator inspection
 
 ## Phase Details
@@ -57,8 +57,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Define execution-target contracts and target-aware dispatch boundaries
-- [ ] 08-02-PLAN.md — Implement remote target placement and operator-visible target inspection
+- [x] 08-01-PLAN.md — Define execution-target contracts and target-aware dispatch boundaries
+- [x] 08-02-PLAN.md — Implement remote target placement and operator-visible target inspection
 
 ### Phase 9: Run Timeline Views
 **Goal**: Operators can inspect the full shape of a run through timelines and filters instead of transcript spelunking.
@@ -83,5 +83,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9
 |-------|-----------|----------------|--------|-----------|
 | 6. Adaptive Routing Signals | v1.1 | 2/2 | Complete | 2026-04-11 |
 | 7. Partial Replanning Flow | v1.1 | 2/2 | Complete | 2026-04-11 |
-| 8. Remote Execution Targets | v1.1 | 0/2 | Not started | - |
+| 8. Remote Execution Targets | v1.1 | 2/2 | Complete   | 2026-04-11 |
 | 9. Run Timeline Views | v1.1 | 0/2 | Not started | - |
