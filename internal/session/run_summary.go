@@ -74,6 +74,9 @@ func BuildRunSummary(graph *RunGraph) *RunSummary {
 		if task.BlockerCase != nil && task.BlockerCase.CurrentTaskID != "" && task.BlockerCase.CurrentTaskID != task.Task.TaskID {
 			excludedTaskIDs[task.BlockerCase.CurrentTaskID] = struct{}{}
 		}
+		if task.PartialReplan != nil && task.PartialReplan.ReplacementTaskID != "" {
+			excludedTaskIDs[task.PartialReplan.ReplacementTaskID] = struct{}{}
+		}
 	}
 
 	items := make([]RunSummaryItem, 0, len(graph.Tasks))
@@ -135,6 +138,11 @@ func FormatRunSummary(summary *RunSummary) string {
 
 func buildRunSummaryItem(sourceTask *RunGraphTask, taskByID map[protocol.TaskID]*RunGraphTask) RunSummaryItem {
 	effectiveTask := sourceTask
+	if sourceTask.PartialReplan != nil && sourceTask.PartialReplan.ReplacementTaskID != "" {
+		if replacementTask, ok := taskByID[sourceTask.PartialReplan.ReplacementTaskID]; ok {
+			effectiveTask = replacementTask
+		}
+	}
 	if sourceTask.BlockerCase != nil && sourceTask.BlockerCase.CurrentTaskID != "" && sourceTask.BlockerCase.CurrentTaskID != sourceTask.Task.TaskID {
 		if currentTask, ok := taskByID[sourceTask.BlockerCase.CurrentTaskID]; ok {
 			effectiveTask = currentTask

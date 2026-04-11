@@ -23,6 +23,9 @@ type RunGraphTask struct {
 	DeclaredState string
 	ReviewHandoff *protocol.ReviewHandoff
 	BlockerCase   *protocol.BlockerCase
+	PartialReplan *protocol.PartialReplan
+	ReplanSource  protocol.TaskID
+	Supersedes    protocol.TaskID
 }
 
 type runMessageSummary struct {
@@ -209,6 +212,71 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		sourceTask.BlockerCase = blocker
 	}
 
+	replans, err := loadRunPartialReplans(stateDir, run.RunID)
+	if err != nil {
+		return nil, err
+	}
+	for _, replan := range replans {
+		if replan.RunID != run.RunID {
+			return nil, coordinatorArtifactMismatch("partial replan %s belongs to run %s, not %s", replan.SourceTaskID, replan.RunID, run.RunID)
+		}
+
+		sourceTask, ok := taskByID[replan.SourceTaskID]
+		if !ok {
+			return nil, coordinatorArtifactMismatch("partial replan references missing source task %s", replan.SourceTaskID)
+		}
+		if sourceTask.Task.MessageID != replan.SourceMessageID {
+			return nil, coordinatorArtifactMismatch("partial replan source message mismatch for task %s", replan.SourceTaskID)
+		}
+
+		supersededTask, ok := taskByID[replan.SupersededTaskID]
+		if !ok {
+			return nil, coordinatorArtifactMismatch("partial replan references missing superseded task %s", replan.SupersededTaskID)
+		}
+		if supersededTask.Task.MessageID != replan.SupersededMessageID {
+			return nil, coordinatorArtifactMismatch("partial replan superseded message mismatch for task %s", replan.SupersededTaskID)
+		}
+
+		replacementTask, ok := taskByID[replan.ReplacementTaskID]
+		if !ok {
+			return nil, coordinatorArtifactMismatch("partial replan references missing replacement task %s", replan.ReplacementTaskID)
+		}
+		if replacementTask.Task.MessageID != replan.ReplacementMessageID {
+			return nil, coordinatorArtifactMismatch("partial replan replacement message mismatch for task %s", replan.ReplacementTaskID)
+		}
+
+		resolvedReplan, err := store.FindPartialReplanByReplacementTaskID(run.RunID, replan.ReplacementTaskID)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, coordinatorArtifactMismatch("partial replan replacement lookup missing for task %s", replan.ReplacementTaskID)
+			}
+			return nil, err
+		}
+		if resolvedReplan.SourceTaskID != replan.SourceTaskID {
+			return nil, coordinatorArtifactMismatch("partial replan replacement lookup mismatch for source task %s", replan.SourceTaskID)
+		}
+
+		if sourceTask.BlockerCase == nil {
+			return nil, coordinatorArtifactMismatch("partial replan source task %s is missing blocker case", replan.SourceTaskID)
+		}
+		if sourceTask.BlockerCase.Resolution == nil {
+			return nil, coordinatorArtifactMismatch("partial replan source task %s is missing blocker resolution", replan.SourceTaskID)
+		}
+		if sourceTask.BlockerCase.Resolution.Action != protocol.BlockerResolutionActionPartialReplan {
+			return nil, coordinatorArtifactMismatch("partial replan source task %s blocker resolution is not partial_replan", replan.SourceTaskID)
+		}
+		if sourceTask.BlockerCase.Resolution.CreatedTaskID != replan.ReplacementTaskID {
+			return nil, coordinatorArtifactMismatch("partial replan replacement task mismatch for source task %s", replan.SourceTaskID)
+		}
+		if sourceTask.BlockerCase.Resolution.CreatedMessageID != replan.ReplacementMessageID {
+			return nil, coordinatorArtifactMismatch("partial replan replacement message mismatch for source task %s", replan.SourceTaskID)
+		}
+
+		sourceTask.PartialReplan = replan
+		replacementTask.ReplanSource = replan.SourceTaskID
+		replacementTask.Supersedes = replan.SupersededTaskID
+	}
+
 	sort.Slice(graph.Tasks, func(i, j int) bool {
 		return graph.Tasks[i].Task.TaskID < graph.Tasks[j].Task.TaskID
 	})
@@ -300,6 +368,17 @@ func FormatRunGraph(graph *RunGraph) string {
 			if task.BlockerCase.Resolution != nil {
 				fmt.Fprintf(&builder, "Resolution: %s\n", formatBlockerResolution(task.BlockerCase.Resolution))
 			}
+		}
+		if task.PartialReplan != nil {
+			fmt.Fprintf(&builder, "Partial Replan: %s\n", normalizeDisplayValue(string(task.PartialReplan.Status)))
+			fmt.Fprintf(&builder, "Superseded Task: %s\n", displayTaskID(task.PartialReplan.SupersededTaskID))
+			fmt.Fprintf(&builder, "Replacement Task: %s\n", displayTaskID(task.PartialReplan.ReplacementTaskID))
+			fmt.Fprintf(&builder, "Replacement Owner: %s\n", normalizeDisplayValue(string(task.PartialReplan.ReplacementOwner)))
+			fmt.Fprintf(&builder, "Replan Reason: %s\n", normalizeDisplayValue(task.PartialReplan.Reason))
+		}
+		if task.ReplanSource != "" {
+			fmt.Fprintf(&builder, "Replan Source: %s\n", displayTaskID(task.ReplanSource))
+			fmt.Fprintf(&builder, "Supersedes: %s\n", displayTaskID(task.Supersedes))
 		}
 	}
 
@@ -453,6 +532,36 @@ func loadRunBlockers(stateDir string, runID protocol.RunID) (map[protocol.TaskID
 	}
 
 	return blockers, nil
+}
+
+func loadRunPartialReplans(stateDir string, runID protocol.RunID) (map[protocol.TaskID]*protocol.PartialReplan, error) {
+	entries, err := os.ReadDir(mailbox.RunPartialReplansDir(stateDir, runID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[protocol.TaskID]*protocol.PartialReplan{}, nil
+		}
+		return nil, fmt.Errorf("read run partial replans dir: %w", err)
+	}
+
+	replans := make(map[protocol.TaskID]*protocol.PartialReplan, len(entries))
+	coordinatorStore := mailbox.NewCoordinatorStore(stateDir)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		sourceTaskID := protocol.TaskID(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
+		replan, err := coordinatorStore.ReadPartialReplan(runID, sourceTaskID)
+		if err != nil {
+			if strings.Contains(err.Error(), "does not match path") {
+				return nil, coordinatorArtifactMismatch("partial replan %s path mismatch", sourceTaskID)
+			}
+			return nil, err
+		}
+		replans[sourceTaskID] = replan
+	}
+
+	return replans, nil
 }
 
 func coordinatorArtifactMismatch(format string, args ...any) error {

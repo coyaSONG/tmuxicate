@@ -17,12 +17,13 @@ func TestBlockerResolveManualRerouteRecordsResolution(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		fixture.run.RunID,
-		fixture.sourceTask.TaskID,
-		protocol.BlockerResolutionActionManualReroute,
-		"backend-low",
-		"manual reroute to the lower-priority backend owner",
-		nil,
+		BlockerResolveOpts{
+			RunID:        fixture.run.RunID,
+			SourceTaskID: fixture.sourceTask.TaskID,
+			Action:       protocol.BlockerResolutionActionManualReroute,
+			Owner:        "backend-low",
+			Reason:       "manual reroute to the lower-priority backend owner",
+		},
 	); err != nil {
 		t.Fatalf("blocker resolve: %v", err)
 	}
@@ -66,12 +67,13 @@ func TestBlockerResolveClarifySendsDecisionMessage(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		fixture.run.RunID,
-		fixture.sourceTask.TaskID,
-		protocol.BlockerResolutionActionClarify,
-		"",
-		"ask the current owner whether to keep the session dependency split",
-		[]byte("Please confirm whether the session/protocol split still holds.\n"),
+		BlockerResolveOpts{
+			RunID:        fixture.run.RunID,
+			SourceTaskID: fixture.sourceTask.TaskID,
+			Action:       protocol.BlockerResolutionActionClarify,
+			Reason:       "ask the current owner whether to keep the session dependency split",
+			Body:         []byte("Please confirm whether the session/protocol split still holds.\n"),
+		},
 	); err != nil {
 		t.Fatalf("blocker resolve: %v", err)
 	}
@@ -122,12 +124,12 @@ func TestBlockerResolveDismissMarksResolved(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		fixture.run.RunID,
-		fixture.sourceTask.TaskID,
-		protocol.BlockerResolutionActionDismiss,
-		"",
-		"operator dismissed this blocker after manual inspection",
-		nil,
+		BlockerResolveOpts{
+			RunID:        fixture.run.RunID,
+			SourceTaskID: fixture.sourceTask.TaskID,
+			Action:       protocol.BlockerResolutionActionDismiss,
+			Reason:       "operator dismissed this blocker after manual inspection",
+		},
 	); err != nil {
 		t.Fatalf("blocker resolve: %v", err)
 	}
@@ -252,16 +254,15 @@ func TestBlockerResolvePartialReplanRejectsExistingArtifactOrNonEscalatedBlocker
 		store := mailbox.NewStore(fixture.cfg.Session.StateDir)
 		coordinatorStore := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir)
 
-		replacementTask, _, err := RouteChildTask(fixture.cfg, store, protocol.RouteChildTaskRequest{
-			RunID:          fixture.run.RunID,
-			TaskClass:      protocol.TaskClassImplementation,
-			Domains:        []string{"session", "protocol"},
+		replacementTask, err := AddChildTask(fixture.cfg, store, ChildTaskRequest{
+			ParentRunID:    fixture.run.RunID,
+			Owner:          "backend-low",
 			Goal:           "Existing bounded replacement",
 			ExpectedOutput: "duplicate partial replan should be rejected",
 			ReviewRequired: fixture.sourceTask.ReviewRequired,
 		})
 		if err != nil {
-			t.Fatalf("route child task: %v", err)
+			t.Fatalf("add child task: %v", err)
 		}
 
 		now := time.Now().UTC()

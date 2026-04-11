@@ -414,6 +414,10 @@ func newBlockerResolveCmd() *cobra.Command {
 	var reason string
 	var bodyFile string
 	var useStdin bool
+	var taskClass string
+	var domains []string
+	var goal string
+	var expectedOutput string
 
 	cmd := &cobra.Command{
 		Use:   "resolve <run-id> <source-task-id>",
@@ -434,18 +438,24 @@ func newBlockerResolveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			opts := session.BlockerResolveOpts{
+				RunID:          protocol.RunID(args[0]),
+				SourceTaskID:   protocol.TaskID(args[1]),
+				Action:         resolutionAction,
+				Owner:          owner,
+				Reason:         reason,
+				Body:           body,
+				TaskClass:      protocol.TaskClass(taskClass),
+				Domains:        domains,
+				Goal:           goal,
+				ExpectedOutput: expectedOutput,
+			}
+			if err := opts.Validate(); err != nil {
+				return err
+			}
 
 			store := mailbox.NewStore(resolvedStateDir)
-			if err := session.BlockerResolve(
-				resolvedStateDir,
-				store,
-				protocol.RunID(args[0]),
-				protocol.TaskID(args[1]),
-				resolutionAction,
-				owner,
-				reason,
-				body,
-			); err != nil {
+			if err := session.BlockerResolve(resolvedStateDir, store, opts); err != nil {
 				return err
 			}
 
@@ -456,11 +466,15 @@ func newBlockerResolveCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "override session state directory")
-	cmd.Flags().StringVar(&action, "action", "", "blocker resolution action: manual_reroute, clarify, or dismiss")
-	cmd.Flags().StringVar(&owner, "owner", "", "override reroute owner for manual_reroute")
+	cmd.Flags().StringVar(&action, "action", "", "blocker resolution action: manual_reroute, partial_replan, clarify, or dismiss")
+	cmd.Flags().StringVar(&owner, "owner", "", "override reroute owner for manual_reroute or partial_replan")
 	cmd.Flags().StringVar(&reason, "reason", "", "operator resolution reason")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "path to clarification body file")
 	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read clarification body from stdin")
+	cmd.Flags().StringVar(&taskClass, "task-class", "", "replacement task class for partial_replan")
+	cmd.Flags().StringSliceVar(&domains, "domains", nil, "replacement task domains for partial_replan")
+	cmd.Flags().StringVar(&goal, "goal", "", "replacement task goal for partial_replan")
+	cmd.Flags().StringVar(&expectedOutput, "expected-output", "", "replacement task expected output for partial_replan")
 	_ = cmd.MarkFlagRequired("action")
 
 	return cmd
