@@ -136,6 +136,70 @@ func TestTaskDoneCommandPrintsSummaryOnlyForRootRunCompletion(t *testing.T) {
 	})
 }
 
+func TestTaskDoneRootRefreshesAdaptiveRoutingPreferences(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedAdaptiveRoutingCLIFixture(t)
+	if _, err := session.ReadMsg(fixture.cfg.Session.StateDir, string(fixture.run.Coordinator), fixture.run.RootMessageID); err != nil {
+		t.Fatalf("activate root task: %v", err)
+	}
+
+	output, err := executeRootCommand(t,
+		"task",
+		"done",
+		string(fixture.run.RootMessageID),
+		"--state-dir",
+		fixture.cfg.Session.StateDir,
+		"--agent",
+		string(fixture.run.Coordinator),
+	)
+	if err != nil {
+		t.Fatalf("task done command: %v", err)
+	}
+	if !strings.Contains(output, "done\n") {
+		t.Fatalf("expected root completion output to include done marker, got %q", output)
+	}
+
+	preferencePath := mailbox.AdaptiveRoutingPreferencesPath(fixture.cfg.Session.StateDir, protocol.AgentName("pm"))
+	if _, err := os.Stat(preferencePath); err != nil {
+		t.Fatalf("expected adaptive preference artifact at %s: %v", preferencePath, err)
+	}
+
+	preferences, err := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir).ReadAdaptiveRoutingPreferences(protocol.AgentName("pm"))
+	if err != nil {
+		t.Fatalf("ReadAdaptiveRoutingPreferences() unexpected error: %v", err)
+	}
+	if preferences.Coordinator != "pm" {
+		t.Fatalf("preferences.Coordinator = %q, want %q", preferences.Coordinator, "pm")
+	}
+}
+
+func TestTaskDoneChildTaskDoesNotRefreshAdaptiveRoutingPreferences(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedAdaptiveRoutingCLIFixture(t)
+	if _, err := session.ReadMsg(fixture.cfg.Session.StateDir, string(fixture.childTask.Owner), fixture.childTask.MessageID); err != nil {
+		t.Fatalf("activate child task: %v", err)
+	}
+
+	if _, err := executeRootCommand(t,
+		"task",
+		"done",
+		string(fixture.childTask.MessageID),
+		"--state-dir",
+		fixture.cfg.Session.StateDir,
+		"--agent",
+		string(fixture.childTask.Owner),
+	); err != nil {
+		t.Fatalf("task done command: %v", err)
+	}
+
+	preferencePath := mailbox.AdaptiveRoutingPreferencesPath(fixture.cfg.Session.StateDir, protocol.AgentName("pm"))
+	if _, err := os.Stat(preferencePath); !os.IsNotExist(err) {
+		t.Fatalf("expected no adaptive preference artifact after child completion, stat err = %v", err)
+	}
+}
+
 type cliSummaryFixture struct {
 	cfg           *config.ResolvedConfig
 	configPath    string
@@ -145,6 +209,13 @@ type cliSummaryFixture struct {
 }
 
 type cliChildTaskFixture struct {
+	cfg        *config.ResolvedConfig
+	configPath string
+	run        *protocol.CoordinatorRun
+	childTask  *protocol.ChildTask
+}
+
+type adaptiveRoutingCLIFixture struct {
 	cfg        *config.ResolvedConfig
 	configPath string
 	run        *protocol.CoordinatorRun
@@ -235,6 +306,50 @@ func seedCLIChildTaskFixture(t *testing.T) cliChildTaskFixture {
 	}
 }
 
+func seedAdaptiveRoutingCLIFixture(t *testing.T) adaptiveRoutingCLIFixture {
+	t.Helper()
+
+	cfg, configPath := writeCLIConfigFiles(t, testAdaptiveCLIConfig(t))
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := session.Run(cfg, store, session.RunRequest{
+		Goal:        "Refresh adaptive preferences only from root completion",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	childTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+		ParentRunID:       run.RunID,
+		Owner:             "backend-steady",
+		Goal:              "Complete one adaptive implementation task",
+		ExpectedOutput:    "task completion feeds later adaptive preference rebuild",
+		TaskClass:         protocol.TaskClassImplementation,
+		Domains:           []string{"session", "protocol"},
+		NormalizedDomains: []string{"protocol", "session"},
+		DuplicateKey:      string(run.RunID) + "|implementation|protocol,session",
+		RoutingDecision: protocol.RoutingDecision{
+			Status:          "selected",
+			SelectedOwner:   "backend-steady",
+			Candidates:      []protocol.AgentName{"backend-fast", "backend-steady"},
+			TieBreak:        "route_priority desc, config_order asc",
+			DuplicateStatus: "unique",
+		},
+	})
+	if err != nil {
+		t.Fatalf("add child task: %v", err)
+	}
+
+	return adaptiveRoutingCLIFixture{
+		cfg:        cfg,
+		configPath: configPath,
+		run:        run,
+		childTask:  childTask,
+	}
+}
+
 func testCLIConfig(t *testing.T) *config.ResolvedConfig {
 	t.Helper()
 
@@ -317,6 +432,89 @@ func testCLIConfig(t *testing.T) *config.ResolvedConfig {
 		},
 		ConfigDir: baseDir,
 	}
+}
+
+func testAdaptiveCLIConfig(t *testing.T) *config.ResolvedConfig {
+	t.Helper()
+
+	cfg := testCLIConfig(t)
+	cfg.Routing.Adaptive = config.AdaptiveRoutingConfig{
+		Enabled:                 true,
+		LookbackRuns:            3,
+		SuccessWeight:           4,
+		ApprovalWeight:          3,
+		ChangesRequestedPenalty: 2,
+		BlockedPenalty:          5,
+		WaitPenalty:             1,
+		ManualPreferences: []config.AdaptiveManualPreference{
+			{
+				TaskClass:      protocol.TaskClassImplementation,
+				Domains:        []string{"protocol", "session"},
+				PreferredOwner: "backend-steady",
+				Weight:         2,
+				Reason:         "Keeps protocol-heavy work on the same owner when the signal is explicit",
+			},
+		},
+	}
+	cfg.Agents = []config.AgentConfig{
+		{
+			Name:    "pm",
+			Alias:   "lead",
+			Adapter: "generic",
+			Command: "fake-agent",
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassResearch),
+				Domains:     []string{"routing"},
+				Description: "Coordinates adaptive routing CLI tests",
+			},
+			Pane:      config.PaneConfig{Slot: "main"},
+			Teammates: []string{"backend-fast", "backend-steady", "reviewer"},
+		},
+		{
+			Name:          "backend-fast",
+			Alias:         "fast",
+			Adapter:       "generic",
+			Command:       "fake-agent",
+			RoutePriority: 30,
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassImplementation),
+				Domains:     []string{"protocol", "session"},
+				Description: "Fast implementation owner",
+			},
+			Pane:      config.PaneConfig{Slot: "right-top"},
+			Teammates: []string{"pm", "reviewer"},
+		},
+		{
+			Name:          "backend-steady",
+			Alias:         "steady",
+			Adapter:       "generic",
+			Command:       "fake-agent",
+			RoutePriority: 20,
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassImplementation),
+				Domains:     []string{"protocol", "session"},
+				Description: "Steady implementation owner",
+			},
+			Pane:      config.PaneConfig{Slot: "right-bottom"},
+			Teammates: []string{"pm", "reviewer"},
+		},
+		{
+			Name:          "reviewer",
+			Alias:         "qa",
+			Adapter:       "generic",
+			Command:       "fake-agent",
+			RoutePriority: 10,
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassReview),
+				Domains:     []string{"protocol", "session"},
+				Description: "Review owner",
+			},
+			Pane:      config.PaneConfig{Slot: "bottom"},
+			Teammates: []string{"pm", "backend-fast", "backend-steady"},
+		},
+	}
+
+	return cfg
 }
 
 func writeCLIConfigFiles(t *testing.T, cfg *config.ResolvedConfig) (*config.ResolvedConfig, string) {

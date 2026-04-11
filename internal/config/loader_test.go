@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -364,6 +365,108 @@ agents:
 				t.Fatalf("Load() error = %q, want substring %q", err, tt.wantSubstr)
 			}
 		})
+	}
+}
+
+func TestLoadAdaptiveRoutingConfigWithManualPreferences(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "tmuxicate.yaml")
+	writeTestFile(t, cfgPath, `
+version: 1
+session:
+  name: adaptive-routing
+  workspace: .
+  state_dir: .tmuxicate/sessions/adaptive
+routing:
+  coordinator: coordinator
+  adaptive:
+    enabled: true
+    lookback_runs: 3
+    success_weight: 4
+    approval_weight: 3
+    changes_requested_penalty: 2
+    blocked_penalty: 5
+    wait_penalty: 1
+    manual_preferences:
+      - task_class: implementation
+        domains: [session, protocol]
+        preferred_owner: backend-senior
+        weight: 2
+        reason: "Keeps protocol-heavy work on the same owner when the signal is explicit"
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+      description: Coordinates adaptive routing work
+    pane:
+      slot: main
+    teammates:
+      - backend-senior
+  - name: backend-senior
+    alias: api
+    adapter: claude-code
+    command: claude
+    role:
+      kind: implementation
+      domains: [protocol, session]
+      description: Owns protocol-heavy implementation work
+    pane:
+      slot: right-top
+    teammates:
+      - coordinator
+`)
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+
+	if !cfg.Routing.Adaptive.Enabled {
+		t.Fatalf("Routing.Adaptive.Enabled = false, want true")
+	}
+	if cfg.Routing.Adaptive.LookbackRuns != 3 {
+		t.Fatalf("Routing.Adaptive.LookbackRuns = %d, want 3", cfg.Routing.Adaptive.LookbackRuns)
+	}
+	if cfg.Routing.Adaptive.SuccessWeight != 4 {
+		t.Fatalf("Routing.Adaptive.SuccessWeight = %d, want 4", cfg.Routing.Adaptive.SuccessWeight)
+	}
+	if cfg.Routing.Adaptive.ApprovalWeight != 3 {
+		t.Fatalf("Routing.Adaptive.ApprovalWeight = %d, want 3", cfg.Routing.Adaptive.ApprovalWeight)
+	}
+	if cfg.Routing.Adaptive.ChangesRequestedPenalty != 2 {
+		t.Fatalf("Routing.Adaptive.ChangesRequestedPenalty = %d, want 2", cfg.Routing.Adaptive.ChangesRequestedPenalty)
+	}
+	if cfg.Routing.Adaptive.BlockedPenalty != 5 {
+		t.Fatalf("Routing.Adaptive.BlockedPenalty = %d, want 5", cfg.Routing.Adaptive.BlockedPenalty)
+	}
+	if cfg.Routing.Adaptive.WaitPenalty != 1 {
+		t.Fatalf("Routing.Adaptive.WaitPenalty = %d, want 1", cfg.Routing.Adaptive.WaitPenalty)
+	}
+	if len(cfg.Routing.Adaptive.ManualPreferences) != 1 {
+		t.Fatalf("Routing.Adaptive.ManualPreferences = %d, want 1", len(cfg.Routing.Adaptive.ManualPreferences))
+	}
+
+	preference := cfg.Routing.Adaptive.ManualPreferences[0]
+	if preference.TaskClass != protocol.TaskClassImplementation {
+		t.Fatalf("preference.TaskClass = %q, want %q", preference.TaskClass, protocol.TaskClassImplementation)
+	}
+	if got, want := preference.Domains, []string{"protocol", "session"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("preference.Domains = %#v, want %#v", got, want)
+	}
+	if preference.PreferredOwner != "backend-senior" {
+		t.Fatalf("preference.PreferredOwner = %q, want %q", preference.PreferredOwner, "backend-senior")
+	}
+	if preference.Weight != 2 {
+		t.Fatalf("preference.Weight = %d, want 2", preference.Weight)
+	}
+	if preference.Reason != "Keeps protocol-heavy work on the same owner when the signal is explicit" {
+		t.Fatalf("preference.Reason = %q, want exact fixture reason", preference.Reason)
 	}
 }
 
