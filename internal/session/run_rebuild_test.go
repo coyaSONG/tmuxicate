@@ -164,6 +164,75 @@ func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
 	}
 }
 
+func TestFormatRunGraphIncludesAdaptiveRoutingExplanation(t *testing.T) {
+	t.Parallel()
+
+	cfg := testAdaptiveRoutingConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Render adaptive routing explanation from durable task artifacts",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	preferences := &protocol.AdaptiveRoutingPreferenceSet{
+		Coordinator:  "pm",
+		UpdatedAt:    time.Now().UTC(),
+		LookbackRuns: 3,
+		Preferences: []protocol.AdaptiveRoutingPreference{
+			{
+				PreferenceKey:     "implementation|protocol,session|backend-steady",
+				TaskClass:         protocol.TaskClassImplementation,
+				NormalizedDomains: []string{"protocol", "session"},
+				PreferredOwner:    "backend-steady",
+				HistoricalScore:   4,
+				ManualWeight:      2,
+				TotalScore:        6,
+				Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+					{RunID: "run_000000000001", SourceTaskID: "task_000000000001", MessageID: "msg_000000000001", Status: "completed", Note: "completed source task without blocker or review downgrade"},
+				},
+			},
+		},
+	}
+	if err := mailbox.NewCoordinatorStore(cfg.Session.StateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
+	}
+
+	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Render adaptive routing from run show",
+		ExpectedOutput: "task-local routing evidence includes adaptive detail",
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+
+	writeTaskState(t, cfg.Session.StateDir, string(task.Owner), task.MessageID, task.ThreadID, protocol.FolderStateUnread, "idle")
+
+	graph, err := LoadRunGraph(cfg.Session.StateDir, run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Adaptive Routing:",
+		"Adaptive Baseline:",
+		"Adaptive Score:",
+		"Adaptive Evidence:",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 func TestRunShowIncludesReviewHandoffBlock(t *testing.T) {
 	t.Parallel()
 

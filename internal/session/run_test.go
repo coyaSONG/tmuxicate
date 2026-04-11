@@ -322,6 +322,257 @@ func TestRouteChildTaskAllowsFanoutReviewClass(t *testing.T) {
 	}
 }
 
+func TestRouteChildTaskAppliesAdaptivePreferenceWithinEligibleCandidates(t *testing.T) {
+	t.Parallel()
+
+	cfg := testAdaptiveRoutingConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Route implementation work with adaptive preference evidence",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	preferences := &protocol.AdaptiveRoutingPreferenceSet{
+		Coordinator:  "pm",
+		UpdatedAt:    time.Now().UTC(),
+		LookbackRuns: 3,
+		Preferences: []protocol.AdaptiveRoutingPreference{
+			{
+				PreferenceKey:     "implementation|protocol,session|backend-steady",
+				TaskClass:         protocol.TaskClassImplementation,
+				NormalizedDomains: []string{"protocol", "session"},
+				PreferredOwner:    "backend-steady",
+				HistoricalScore:   4,
+				ManualWeight:      2,
+				TotalScore:        6,
+				Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+					{
+						RunID:        "run_000000000001",
+						SourceTaskID: "task_000000000001",
+						MessageID:    "msg_000000000001",
+						Status:       "completed",
+						Note:         "completed source task without blocker or review downgrade",
+					},
+				},
+			},
+		},
+	}
+	if err := mailbox.NewCoordinatorStore(cfg.Session.StateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
+	}
+
+	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Prefer the steady owner only inside the eligible candidate set",
+		ExpectedOutput: "adaptive routing should stay deterministic and inspectable",
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+
+	if task.Owner != "backend-steady" {
+		t.Fatalf("task owner = %q, want %q", task.Owner, "backend-steady")
+	}
+	if decision == nil || decision.Adaptive == nil || !decision.Adaptive.Applied {
+		t.Fatalf("expected adaptive routing explanation to be applied")
+	}
+	if decision.Adaptive.BaselineOwner != "backend-fast" {
+		t.Fatalf("adaptive baseline owner = %q, want %q", decision.Adaptive.BaselineOwner, "backend-fast")
+	}
+}
+
+func TestRouteChildTaskFallsBackToBaselineWhenAdaptiveScoresTieOrMissing(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing preference keeps baseline selection", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testAdaptiveRoutingConfig(t)
+		store := mailbox.NewStore(cfg.Session.StateDir)
+		run, err := Run(cfg, store, RunRequest{
+			Goal:        "Keep the deterministic baseline when no adaptive row matches",
+			Coordinator: "pm",
+			CreatedBy:   "human",
+		})
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+			RunID:          run.RunID,
+			TaskClass:      protocol.TaskClassImplementation,
+			Domains:        []string{"session", "protocol"},
+			Goal:           "No adaptive preference should mean baseline routing",
+			ExpectedOutput: "route_priority desc, config_order asc",
+		})
+		if err != nil {
+			t.Fatalf("route child task: %v", err)
+		}
+		if task.Owner != "backend-fast" {
+			t.Fatalf("task owner = %q, want %q", task.Owner, "backend-fast")
+		}
+		if decision.Adaptive != nil && decision.Adaptive.Applied {
+			t.Fatalf("expected no adaptive application when the exact preference key is missing")
+		}
+	})
+
+	t.Run("equal adaptive scores keep baseline selection", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testAdaptiveRoutingConfig(t)
+		store := mailbox.NewStore(cfg.Session.StateDir)
+		run, err := Run(cfg, store, RunRequest{
+			Goal:        "Keep the deterministic baseline on adaptive score ties",
+			Coordinator: "pm",
+			CreatedBy:   "human",
+		})
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		preferences := &protocol.AdaptiveRoutingPreferenceSet{
+			Coordinator:  "pm",
+			UpdatedAt:    time.Now().UTC(),
+			LookbackRuns: 3,
+			Preferences: []protocol.AdaptiveRoutingPreference{
+				{
+					PreferenceKey:     "implementation|protocol,session|backend-fast",
+					TaskClass:         protocol.TaskClassImplementation,
+					NormalizedDomains: []string{"protocol", "session"},
+					PreferredOwner:    "backend-fast",
+					HistoricalScore:   4,
+					ManualWeight:      2,
+					TotalScore:        6,
+					Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+						{RunID: "run_000000000001", SourceTaskID: "task_000000000001", MessageID: "msg_000000000001", Status: "completed", Note: "completed"},
+					},
+				},
+				{
+					PreferenceKey:     "implementation|protocol,session|backend-steady",
+					TaskClass:         protocol.TaskClassImplementation,
+					NormalizedDomains: []string{"protocol", "session"},
+					PreferredOwner:    "backend-steady",
+					HistoricalScore:   4,
+					ManualWeight:      2,
+					TotalScore:        6,
+					Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+						{RunID: "run_000000000002", SourceTaskID: "task_000000000002", MessageID: "msg_000000000002", Status: "completed", Note: "completed"},
+					},
+				},
+			},
+		}
+		if err := mailbox.NewCoordinatorStore(cfg.Session.StateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+			t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
+		}
+
+		task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+			RunID:          run.RunID,
+			TaskClass:      protocol.TaskClassImplementation,
+			Domains:        []string{"session", "protocol"},
+			Goal:           "Tie adaptive scores must preserve baseline order",
+			ExpectedOutput: "route_priority desc, config_order asc",
+		})
+		if err != nil {
+			t.Fatalf("route child task: %v", err)
+		}
+		if task.Owner != "backend-fast" {
+			t.Fatalf("task owner = %q, want %q", task.Owner, "backend-fast")
+		}
+		if decision.Adaptive != nil && decision.Adaptive.Applied {
+			t.Fatalf("expected no adaptive override when total_score values tie")
+		}
+	})
+}
+
+func TestRouteChildTaskPersistsAdaptiveExplanation(t *testing.T) {
+	t.Parallel()
+
+	cfg := testAdaptiveRoutingConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Persist adaptive explanation fields on the canonical routing decision",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	preferences := &protocol.AdaptiveRoutingPreferenceSet{
+		Coordinator:  "pm",
+		UpdatedAt:    time.Now().UTC(),
+		LookbackRuns: 3,
+		Preferences: []protocol.AdaptiveRoutingPreference{
+			{
+				PreferenceKey:     "implementation|protocol,session|backend-steady",
+				TaskClass:         protocol.TaskClassImplementation,
+				NormalizedDomains: []string{"protocol", "session"},
+				PreferredOwner:    "backend-steady",
+				HistoricalScore:   4,
+				ManualWeight:      2,
+				TotalScore:        6,
+				Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+					{
+						RunID:        "run_000000000001",
+						SourceTaskID: "task_000000000001",
+						MessageID:    "msg_000000000001",
+						Status:       "completed",
+						Note:         "completed source task without blocker or review downgrade",
+					},
+				},
+			},
+		},
+	}
+	if err := mailbox.NewCoordinatorStore(cfg.Session.StateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
+	}
+
+	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Route with persisted adaptive explanation",
+		ExpectedOutput: "task and decision contain adaptive reasoning fields",
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+	if decision == nil || decision.Adaptive == nil {
+		t.Fatalf("expected adaptive explanation on returned routing decision")
+	}
+
+	taskYAML, err := yaml.Marshal(task)
+	if err != nil {
+		t.Fatalf("marshal task yaml: %v", err)
+	}
+	decisionYAML, err := yaml.Marshal(decision)
+	if err != nil {
+		t.Fatalf("marshal decision yaml: %v", err)
+	}
+
+	requiredFields := []string{
+		"baseline_owner:",
+		"historical_score:",
+		"manual_weight:",
+		"total_score:",
+		"reason:",
+	}
+	for _, field := range requiredFields {
+		if !strings.Contains(string(taskYAML), field) {
+			t.Fatalf("expected task yaml to contain %q\n%s", field, taskYAML)
+		}
+		if !strings.Contains(string(decisionYAML), field) {
+			t.Fatalf("expected decision yaml to contain %q\n%s", field, decisionYAML)
+		}
+	}
+}
+
 func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 	t.Parallel()
 

@@ -200,6 +200,79 @@ func TestTaskDoneChildTaskDoesNotRefreshAdaptiveRoutingPreferences(t *testing.T)
 	}
 }
 
+func TestRunRouteTaskCommandPrintsAdaptiveDecisionEvidence(t *testing.T) {
+	t.Parallel()
+
+	cfg, configPath := writeCLIConfigFiles(t, testAdaptiveCLIConfig(t))
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := session.Run(cfg, store, session.RunRequest{
+		Goal:        "Route one implementation task through the CLI with adaptive evidence",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	preferences := &protocol.AdaptiveRoutingPreferenceSet{
+		Coordinator:  "pm",
+		UpdatedAt:    time.Now().UTC(),
+		LookbackRuns: 3,
+		Preferences: []protocol.AdaptiveRoutingPreference{
+			{
+				PreferenceKey:     "implementation|protocol,session|backend-steady",
+				TaskClass:         protocol.TaskClassImplementation,
+				NormalizedDomains: []string{"protocol", "session"},
+				PreferredOwner:    "backend-steady",
+				HistoricalScore:   4,
+				ManualWeight:      2,
+				TotalScore:        6,
+				Evidence: []protocol.AdaptiveRoutingEvidenceRef{
+					{RunID: "run_000000000001", SourceTaskID: "task_000000000001", MessageID: "msg_000000000001", Status: "completed", Note: "completed source task without blocker or review downgrade"},
+				},
+			},
+		},
+	}
+	if err := mailbox.NewCoordinatorStore(cfg.Session.StateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
+	}
+
+	output, err := executeRootCommand(t,
+		"run",
+		"route-task",
+		"--config",
+		configPath,
+		"--run",
+		string(run.RunID),
+		"--task-class",
+		"implementation",
+		"--domain",
+		"session",
+		"--domain",
+		"protocol",
+		"--goal",
+		"Route with adaptive CLI evidence",
+		"--expected-output",
+		"selected owner and adaptive explanation are printed",
+	)
+	if err != nil {
+		t.Fatalf("run route-task command: %v", err)
+	}
+
+	requiredSnippets := []string{
+		"backend-steady",
+		"Adaptive Routing:",
+		"Adaptive Baseline:",
+		"Adaptive Score:",
+		"Adaptive Evidence:",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected route-task output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 type cliSummaryFixture struct {
 	cfg           *config.ResolvedConfig
 	configPath    string
