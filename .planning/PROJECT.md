@@ -2,108 +2,103 @@
 
 ## What This Is
 
-`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. As of `v1.0`, that foundation now includes coordinator-driven run decomposition, deterministic routing, linked review handoff, blocker escalation, and operator-facing run summaries built on the same durable mailbox model.
+`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. As of `v1.1`, that workflow now includes durable coordinator runs, deterministic and adaptive routing, linked review and blocker recovery flows, explicit execution-target placement, and timeline-based operator inspection built on the same mailbox-backed state model.
 
 ## Core Value
 
 A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
 
-## Current Milestone: v1.1 Adaptive Coordination
+## Current State
 
-**Goal:** Make coordinator decisions more adaptive across runs and blocker recovery while expanding execution targets and operator visibility without weakening the durable, inspectable workflow model.
-
-**Target features:**
-- Routing preferences learned from prior coordinator runs with explicit explanation of why an owner was selected
-- Partial replanning after blockers that preserves lineage and operator control
-- Remote or sandboxed worker targets alongside local `tmux` panes
-- Richer run timeline and filtering views for operators
+- Shipped `v1.0 Coordinator Automation` on 2026-04-11.
+- Shipped `v1.1 Adaptive Coordination` on 2026-04-11.
+- The latest shipped product supports adaptive routing signals, bounded partial replans, explicit remote or sandbox placement metadata, and filtered per-run timeline views.
+- The core architecture remains the same: `cmd/tmuxicate/main.go` wires the CLI, `internal/session/` owns user-facing workflows, `internal/mailbox/` persists durable state, `internal/runtime/daemon.go` handles local pane notifications, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries.
+- The major remaining product pressure is no longer “can coordinator automation work?”, but “how far can it expand without weakening inspectability or operational trust?”
 
 ## Requirements
 
 ### Validated
 
-- ✓ Human operator can define a multi-agent session in `tmuxicate.yaml` and start it with `tmuxicate up` — existing
-- ✓ Agents can exchange durable mailbox messages with explicit read and reply flows backed by immutable message records and per-recipient receipts — existing
-- ✓ Agents can track task progress with accept, wait, block, and done state transitions — existing
-- ✓ Runtime daemon can watch unread inboxes and inject short pane notifications when an agent looks ready — existing
-- ✓ Operator can inspect the collaboration state through `status`, `log`, inbox commands, and transcript/event files — existing
-- ✓ The system works across multiple agent CLIs through a generic adapter boundary plus Codex and Claude adapters — existing
-- ✓ Coordinator can turn a high-level human goal into a bounded set of child tasks with clear ownership and expected outputs — validated in Phase 1: Coordinator Foundations
-- ✓ Coordinator can route implementation, research, and review tasks to the right agents using declared roles and team relationships — validated in Phase 2: Role-Based Routing
-- ✓ Coordinator can manage a review handoff so completed implementation work reaches a reviewer and the resulting feedback stays linked to the coordinator run — validated in Phase 3: Review Handoff Flow
-- ✓ Coordinator can react to `wait` and `block` states by requesting clarification, re-routing work, or escalating to the human operator through durable blocker cases and explicit operator resolution — validated in Phase 4: Blocker Escalation
-- ✓ Coordinator can produce an end-of-run summary that explains what was completed, what is waiting, what is blocked, what is under review, and what still needs human attention — validated in Phase 5: Run Summaries
+- ✓ Human operator can define a multi-agent session in `tmuxicate.yaml` and start it with `tmuxicate up`
+- ✓ Agents can exchange durable mailbox messages with explicit read and reply flows backed by immutable message records and per-recipient receipts
+- ✓ Agents can track task progress with accept, wait, block, and done state transitions
+- ✓ Runtime daemon can watch unread inboxes and inject short pane notifications when an agent looks ready
+- ✓ Operator can inspect collaboration state through `status`, `log`, inbox commands, and transcript/event files
+- ✓ The system works across multiple agent CLIs through a generic adapter boundary plus Codex and Claude adapters
+- ✓ Coordinator can start durable runs, decompose work into child tasks, and reconstruct that graph from disk
+- ✓ Coordinator can route implementation, research, and review tasks deterministically through declared roles and teammate relationships
+- ✓ Coordinator can manage linked review handoff and reviewer responses inside the same run graph
+- ✓ Coordinator can react to waits and blockers through durable blocker cases, bounded reroutes, and explicit operator resolution
+- ✓ Operator can inspect shared run summaries derived from the durable run graph
+- ✓ Coordinator can rebuild inspectable adaptive routing preferences from completed runs and show why an owner was selected
+- ✓ Coordinator can create bounded partial replans that preserve blocker and replacement lineage
+- ✓ Coordinator can persist explicit execution-target placement for local, remote, and sandboxed workers without breaking current local workflows
+- ✓ Operator can inspect filtered per-run timelines derived from durable artifacts and `state.jsonl`
 
 ### Active
 
-- [ ] Coordinator learns routing preferences from prior runs without hiding why an owner was selected
-- [ ] Coordinator can partially re-plan a run after a blocker while preserving operator visibility and explicit escalation
-- [ ] Coordinator can target remote or sandboxed worker environments in addition to local `tmux` panes
-- [ ] Operator can inspect richer coordinator dashboards with per-run timelines and filtering
+- [ ] Coordinator can turn non-local execution-target metadata into concrete remote transport and provisioning flows
+- [ ] Coordinator can manage nested teams or multiple coordinators within one durable workflow graph
+- [ ] Operators can compare, rebalance, and inspect work across multiple coordinator runs or teams
+- [ ] Coordinator can evolve adaptive signals into richer inspectable recommendations or auto-tuning without hiding control boundaries
 
 ### Out of Scope
 
-- Fully autonomous long-horizon planning without human steering — this would violate the product's "reliability over magic" position
-- Unbounded agent-to-agent chatter or opaque side channels outside the mailbox model — coordination must stay observable and durable
-- Vendor-specific orchestration tied to a single model provider — `tmuxicate` needs to remain multi-agent and multi-vendor
-- Coordinator directly replacing specialist agents as the primary implementer — the coordinator should orchestrate work, not collapse the role model
+- Fully autonomous long-horizon planning without human steering
+- Unbounded agent-to-agent chatter or opaque side channels outside the mailbox model
+- Replacing the mailbox protocol with a separate orchestration backend
+- Vendor-specific orchestration tied to a single model provider
+- Coordinator directly replacing specialist agents as the primary implementer
 
 ## Context
 
-The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The shipped `v1.0` product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts, blocker escalation with durable blocker cases plus explicit operator resolution, and operator-facing run summaries rebuilt from the same durable run graph. The milestone shipped without introducing a replacement orchestration system.
-
-## Current State
-
-- Shipped `v1.0 Coordinator Automation` on 2026-04-11.
-- The current milestone archive covers 5 phases, 12 plans, and 28 execution tasks.
-- The repo now carries roughly 29k lines across Go, shell, YAML, and Markdown, with coordinator automation extending the existing mailbox runtime instead of replacing it.
-- The main remaining product pressure is not feature correctness in `v1.0`, but how to safely expand coordination depth without reducing operator visibility.
+The codebase is now a brownfield Go CLI with two shipped coordinator milestones. `v1.0` proved durable coordinator decomposition, routing, review handoff, blocker escalation, and run summaries. `v1.1` extended that same run graph with adaptive routing evidence, bounded partial replans, execution-target placement metadata, and timeline projections without introducing a replacement backend. The product remains intentionally conservative: durable artifacts and operator visibility outrank hidden autonomy.
 
 ## Next Milestone Goals
 
-- Add smarter coordination that can learn from prior runs and re-plan limited portions of a workflow after blockers.
-- Expand execution targets beyond local `tmux` panes while keeping the current durable mailbox and adapter contracts intact.
-- Improve operator visibility with richer run timelines and filtering so more automation does not make the system harder to inspect.
+- Turn remote and sandbox execution targets from metadata plus local exclusion into concrete remote execution integration
+- Expand topology beyond one coordinator team while keeping run graphs and operator inspection explicit
+- Build richer cross-run operator insight and adaptive automation on top of the now-shipped timeline and placement model
 
 ## Constraints
 
-- **Tech stack**: Stay within the existing Go CLI architecture and current tmux/mailbox runtime — the new work should extend current packages rather than introduce a second orchestration system
-- **Product philosophy**: Reliability and operator visibility come before autonomy — automated behavior must remain inspectable and explicit
-- **Compatibility**: Preserve the existing mailbox protocol and multi-vendor adapter model — current Codex/Claude/generic flows must not be broken by coordinator features
-- **Operational model**: Human operator remains the final escalation point — coordinator automation should surface blocked or risky situations instead of hiding them
-- **Quality**: New orchestration flows need direct test coverage in the currently under-tested session/runtime areas — otherwise automation will amplify regressions
+- **Tech stack**: Stay within the existing Go CLI architecture and current tmux/mailbox runtime
+- **Product philosophy**: Reliability and operator visibility come before autonomy
+- **Compatibility**: Preserve the existing mailbox protocol and multi-vendor adapter model
+- **Operational model**: Human operator remains the final escalation point
+- **Quality**: New orchestration flows need direct test coverage in session/runtime areas because automation amplifies regressions
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Keep the filesystem-backed mailbox as the authoritative coordination layer | Existing product value and recovery model depend on durable, inspectable state | ✓ Good |
-| Build coordinator automation as an orchestration layer on top of current task/reply primitives | This extends the current system without turning it into a different product | — Pending |
-| Focus the next milestone on coordinator-managed decomposition, routing, review, blocker handling, and summary generation | This is the smallest automation slice that materially improves collaboration without overreaching into full autonomy | — Pending |
-| Exclude fully autonomous long-horizon behavior from v1 automation | Human-steerable reliability is a clearer fit than "autonomous swarm" behavior | ✓ Good |
-| Route coordinator work through structured `RoleSpec` metadata plus deterministic `route-task` selection | Role/domain routing must stay inspectable, teammate-constrained, and vendor-independent | ✓ Good |
-| Keep review linkage in a dedicated `ReviewHandoff` artifact keyed by source task ID | Review state must stay durable, explicit, and idempotent without mutating child-task contracts | ✓ Good |
-| Record reviewer outcomes through `tmuxicate review respond` and surface them in `run show` | Review decisions should stay visible through existing operator workflows instead of transcript-only context | ✓ Good |
-| Keep blocker handling on a dedicated `BlockerCase` artifact with code-driven action selection and explicit `blocker resolve` responses | Blocked work must remain durable, inspectable, ceiling-bounded, and human-escalatable without heuristic coordinator behavior | ✓ Good |
-| Keep run summaries as a derived `RunGraph` projection rendered through `run show` and root completion output | Operator summaries must stay inspectable, additive to existing detail, and free of new summary persistence/state machines | ✓ Good |
-| Ship coordinator automation as `v1.0` before attempting adaptive routing or remote worker expansion | The current foundation is strong enough to validate operator-facing workflow value before adding smarter or broader execution behavior | ✓ Good |
+| Build coordinator automation as a workflow layer on top of the current task/reply primitives | This extends the current system without turning it into a different product | ✓ Good |
+| Route coordinator work through structured `RoleSpec` metadata plus deterministic `route-task` selection | Role/domain routing must stay inspectable and teammate-constrained | ✓ Good |
+| Keep review linkage in a dedicated `ReviewHandoff` artifact keyed by source task ID | Review state must stay durable and explicit without mutating child-task contracts | ✓ Good |
+| Keep blocker handling on a dedicated `BlockerCase` artifact with explicit `blocker resolve` actions | Blocked work must remain durable, bounded, and human-escalatable | ✓ Good |
+| Keep run summaries as a derived `RunGraph` projection rendered through `run show` and root completion output | Operator summaries must stay additive and artifact-driven | ✓ Good |
+| Adaptive routing only changes selection when a unique exact-match preference beats the deterministic baseline | Learned behavior must remain deterministic and inspectable | ✓ Good |
+| Partial replans are durable source-task keyed artifacts with one superseded task and one replacement task | Recovery must stay bounded and explicit rather than recursively autonomous | ✓ Good |
+| Implicit local placement is synthesized as explicit execution-target metadata | Placement and filtering need durable target fields even for local tasks | ✓ Good |
+| Only pane-backed local agents participate in tmux lifecycle and daemon notifications | Non-local targets should not pretend to be local panes | ✓ Good |
+| Timeline rebuild validates TaskEvent ownership and thread linkage against canonical artifacts | Operator history must fail loudly on drift instead of guessing | ✓ Good |
+| `run show` remains the single inspection surface; timeline rendering is additive and timeline-only reuses the same formatter path | Visibility should deepen without fragmenting workflows into parallel tools | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
+**After each phase transition:**
+1. Move shipped requirements into Validated
+2. Update current state and constraints if reality changed
+3. Record durable architectural decisions that now shape future work
 
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
+**After each milestone:**
+1. Re-evaluate Core Value and Out of Scope items
+2. Update Current State and Next Milestone Goals
+3. Archive milestone-scoped roadmap and requirements context
 
 ---
-*Last updated: 2026-04-11 after starting v1.1 Adaptive Coordination*
+*Last updated: 2026-04-11 after shipping v1.1 Adaptive Coordination*

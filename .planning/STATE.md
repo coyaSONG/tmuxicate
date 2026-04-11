@@ -4,9 +4,9 @@ milestone: v1.1
 milestone_name: Adaptive Coordination
 current_phase: 09
 current_phase_name: run-timeline-views
-current_plan: 2
-status: complete
-stopped_at: Completed Phase 09 run-timeline-views
+current_plan: Complete
+status: completed
+stopped_at: Milestone v1.1 Adaptive Coordination complete
 last_updated: "2026-04-11T11:26:16.577Z"
 last_activity: 2026-04-11
 progress:
@@ -24,20 +24,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 09 Run Timeline Views is complete; v1.1 Adaptive Coordination is ready for milestone wrap-up
+**Current focus:** Planning the next milestone after shipping v1.1 Adaptive Coordination
 
 ## Current Position
 
 Phase: 09 (run-timeline-views) — COMPLETE
 Current Phase: 09
 Current Phase Name: run-timeline-views
-Plan: 2 of 2 (complete)
-Current Plan: 2
+Plan: 2 of 2
+Current Plan: Complete
 Total Plans in Phase: 2
 Total Phases: 4
-Status: Phase complete
+Status: Milestone v1.1 Adaptive Coordination complete
 Last activity: 2026-04-11
-Last Activity Description: Phase 09 Run Timeline Views completed with a strict timeline read model and filtered `run show` output
+Last Activity Description: v1.1 Adaptive Coordination milestone completed and archived
 
 Progress: [██████████] 100%
 
@@ -126,10 +126,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Existing daemon lifecycle and session-package test gaps are relevant because coordinator automation increases workflow coupling
+- Non-local execution still depends on operator-managed remote environments rather than a built-in transport layer
+- Timeline lifecycle completeness for non-local workers still depends on those workers writing durable `state.jsonl` events
+- Adaptive preferences still refresh only when the coordinator root task is completed
 
 ## Session Continuity
 
 Last session: 2026-04-11T11:26:16.575Z
-Stopped at: Completed Phase 09 run-timeline-views
-Resume file: None
+Stopped at: Milestone v1.1 Adaptive Coordination complete
+Resume file: .planning/milestones/v1.1-MILESTONE-AUDIT.md
