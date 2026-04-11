@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -261,6 +262,34 @@ func adaptivePreferenceKey(taskClass protocol.TaskClass, normalizedDomains []str
 
 func hasAdaptiveRoutingSourceTaskMetadata(task protocol.ChildTask) bool {
 	return task.TaskClass != "" && len(task.NormalizedDomains) > 0 && strings.TrimSpace(string(task.Owner)) != ""
+}
+
+func readAdaptiveRoutingPreferenceSet(stateDir string, coordinator protocol.AgentName) (*protocol.AdaptiveRoutingPreferenceSet, error) {
+	preferenceSet, err := mailbox.NewCoordinatorStore(stateDir).ReadAdaptiveRoutingPreferences(coordinator)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return preferenceSet, nil
+}
+
+func matchAdaptivePreference(preferenceSet *protocol.AdaptiveRoutingPreferenceSet, taskClass protocol.TaskClass, normalizedDomains []string, preferredOwner protocol.AgentName) *protocol.AdaptiveRoutingPreference {
+	if preferenceSet == nil {
+		return nil
+	}
+
+	key := adaptivePreferenceKey(taskClass, normalizedDomains, preferredOwner)
+	for i := range preferenceSet.Preferences {
+		preference := &preferenceSet.Preferences[i]
+		if preference.PreferenceKey == key {
+			return preference
+		}
+	}
+
+	return nil
 }
 
 func compareAdaptiveEvidence(left, right protocol.AdaptiveRoutingEvidenceRef) int {

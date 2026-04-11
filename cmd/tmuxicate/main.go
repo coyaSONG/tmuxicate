@@ -261,13 +261,13 @@ func newRunRouteTaskCmd() *cobra.Command {
 		Use:   "route-task",
 		Short: "Route a child task to one deterministic owner",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.LoadResolved(configPath)
 			if err != nil {
 				return err
 			}
 
-			task, _, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), protocol.RouteChildTaskRequest{
+			task, decision, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), protocol.RouteChildTaskRequest{
 				RunID:          protocol.RunID(runID),
 				TaskClass:      protocol.TaskClass(taskClass),
 				Domains:        domains,
@@ -281,7 +281,26 @@ func newRunRouteTaskCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Println(task.TaskID)
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), task.TaskID); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Selected Owner: %s\n", task.Owner); err != nil {
+				return err
+			}
+			if decision != nil && decision.Adaptive != nil && decision.Adaptive.Applied {
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Routing: %s\n", decision.Adaptive.Reason); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Baseline: %s\n", decision.Adaptive.BaselineOwner); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Score: historical=%d manual=%d total=%d\n", decision.Adaptive.HistoricalScore, decision.Adaptive.ManualWeight, decision.Adaptive.TotalScore); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Evidence: %s\n", formatAdaptiveEvidence(decision.Adaptive.Evidence)); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 	}
@@ -301,6 +320,18 @@ func newRunRouteTaskCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("goal")
 	_ = cmd.MarkFlagRequired("expected-output")
 	return cmd
+}
+
+func formatAdaptiveEvidence(evidence []protocol.AdaptiveRoutingEvidenceRef) string {
+	parts := make([]string, 0, len(evidence))
+	for _, ref := range evidence {
+		parts = append(parts, fmt.Sprintf("run=%s task=%s status=%s", ref.RunID, ref.SourceTaskID, ref.Status))
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 func newRunShowCmd() *cobra.Command {

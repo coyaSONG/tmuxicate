@@ -282,11 +282,29 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 	}
 
 	selected := domainCandidates[0]
+	baseline := selected
+	var adaptiveExplanation *protocol.AdaptiveRoutingExplanation
+	if cfg.Routing.Adaptive.Enabled {
+		preferenceSet, err := readAdaptiveRoutingPreferenceSet(cfg.Session.StateDir, run.Coordinator)
+		if err != nil {
+			return nil, nil, err
+		}
+		adaptiveExplanation = adaptiveRoutingExplanation(req.TaskClass, req.Domains, baseline, domainCandidates, preferenceSet)
+		if adaptiveExplanation != nil && adaptiveExplanation.Applied {
+			for _, candidate := range domainCandidates {
+				if protocol.AgentName(candidate.agent.Name) == adaptiveExplanation.PreferredOwner {
+					selected = candidate
+					break
+				}
+			}
+		}
+	}
 	decision := &protocol.RoutingDecision{
 		Status:        "selected",
 		SelectedOwner: protocol.AgentName(selected.agent.Name),
 		Candidates:    candidateNames(domainCandidates),
 		TieBreak:      "route_priority desc, config_order asc",
+		Adaptive:      adaptiveExplanation,
 	}
 	if existingDuplicate != nil {
 		decision.DuplicateStatus = "fanout"
@@ -533,6 +551,65 @@ func rankCandidates(candidates []routeCandidate) {
 
 		return left.index < right.index
 	})
+}
+
+func adaptiveRoutingExplanation(taskClass protocol.TaskClass, normalizedDomains []string, baseline routeCandidate, candidates []routeCandidate, preferenceSet *protocol.AdaptiveRoutingPreferenceSet) *protocol.AdaptiveRoutingExplanation {
+	if preferenceSet == nil {
+		return nil
+	}
+
+	var (
+		bestCandidate   routeCandidate
+		haveBest        bool
+		bestPreference  *protocol.AdaptiveRoutingPreference
+		scoreTie        bool
+		matchedCount    int
+	)
+	for index := range candidates {
+		candidate := candidates[index]
+		preference := matchAdaptivePreference(preferenceSet, taskClass, normalizedDomains, protocol.AgentName(candidate.agent.Name))
+		if preference == nil {
+			continue
+		}
+		matchedCount++
+		if !haveBest {
+			bestCandidate = candidate
+			haveBest = true
+			bestPreference = preference
+			continue
+		}
+		switch {
+		case preference.TotalScore > bestPreference.TotalScore:
+			bestCandidate = candidate
+			bestPreference = preference
+			scoreTie = false
+		case preference.TotalScore == bestPreference.TotalScore:
+			scoreTie = true
+		}
+	}
+	if matchedCount == 0 || bestPreference == nil || !haveBest || scoreTie {
+		return nil
+	}
+	if bestCandidate.agent.Name == baseline.agent.Name {
+		return nil
+	}
+
+	return &protocol.AdaptiveRoutingExplanation{
+		Applied:         true,
+		BaselineOwner:   protocol.AgentName(baseline.agent.Name),
+		PreferredOwner:  protocol.AgentName(bestCandidate.agent.Name),
+		HistoricalScore: bestPreference.HistoricalScore,
+		ManualWeight:    bestPreference.ManualWeight,
+		TotalScore:      bestPreference.TotalScore,
+		Reason: fmt.Sprintf(
+			"exact preference match on %s|%s favored %s over baseline %s",
+			taskClass,
+			strings.Join(normalizedDomains, ","),
+			bestCandidate.agent.Name,
+			baseline.agent.Name,
+		),
+		Evidence: slices.Clone(bestPreference.Evidence),
+	}
 }
 
 func roleCoversDomains(role config.RoleSpec, domains []string) bool {

@@ -246,6 +246,12 @@ func FormatRunGraph(graph *RunGraph) string {
 			if candidates := formatRoutingCandidates(task.Task.RoutingDecision.Candidates); candidates != "" {
 				fmt.Fprintf(&builder, "Candidates: %s\n", candidates)
 			}
+			if adaptive := task.Task.RoutingDecision.Adaptive; adaptive != nil && adaptive.Applied {
+				fmt.Fprintf(&builder, "Adaptive Routing: %s\n", adaptive.Reason)
+				fmt.Fprintf(&builder, "Adaptive Baseline: %s\n", normalizeDisplayValue(string(adaptive.BaselineOwner)))
+				fmt.Fprintf(&builder, "Adaptive Score: historical=%d manual=%d total=%d\n", adaptive.HistoricalScore, adaptive.ManualWeight, adaptive.TotalScore)
+				fmt.Fprintf(&builder, "Adaptive Evidence: %s\n", formatAdaptiveRoutingEvidence(adaptive.Evidence))
+			}
 		}
 		if strings.TrimSpace(task.Task.OverrideReason) != "" {
 			fmt.Fprintf(&builder, "Override Reason: %s\n", task.Task.OverrideReason)
@@ -451,6 +457,19 @@ func loadRunBlockers(stateDir string, runID protocol.RunID) (map[protocol.TaskID
 
 func coordinatorArtifactMismatch(format string, args ...any) error {
 	return fmt.Errorf("coordinator artifact mismatch: "+format, args...)
+}
+
+func formatAdaptiveRoutingEvidence(evidence []protocol.AdaptiveRoutingEvidenceRef) string {
+	if len(evidence) == 0 {
+		return "-"
+	}
+
+	parts := make([]string, 0, len(evidence))
+	for _, ref := range evidence {
+		parts = append(parts, fmt.Sprintf("run=%s task=%s status=%s", ref.RunID, ref.SourceTaskID, ref.Status))
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 func formatDependsOn(dependsOn []protocol.TaskID) string {
