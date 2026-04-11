@@ -370,6 +370,52 @@ func TestRunShowIncludesBlockerAndReviewBlocksTogether(t *testing.T) {
 	}
 }
 
+func TestRunShowIncludesPartialReplanSourceAndReplacementLineage(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedPartialReplanLineageFixture(t)
+
+	graph, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Task: " + string(fixture.sourceTask.TaskID),
+		"Partial Replan:",
+		"Superseded Task: " + string(fixture.sourceTask.TaskID),
+		"Replacement Task: " + string(fixture.replacementTask.TaskID),
+		"Replacement Owner: " + string(fixture.replacementTask.Owner),
+		"Replan Reason: " + fixture.replan.Reason,
+		"Task: " + string(fixture.replacementTask.TaskID),
+		"Replan Source: " + string(fixture.sourceTask.TaskID),
+		"Supersedes: " + string(fixture.sourceTask.TaskID),
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
+func TestLoadRunGraphRejectsBrokenPartialReplanLinks(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedPartialReplanLineageFixture(t)
+	mutatePartialReplanDocument(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask.TaskID, func(replanDoc map[string]any) {
+		replanDoc["replacement_message_id"] = string(protocol.NewMessageID(999))
+	})
+
+	_, err := LoadRunGraph(fixture.cfg.Session.StateDir, fixture.run.RunID)
+	if err == nil {
+		t.Fatalf("expected broken partial replan links to fail")
+	}
+	if !strings.Contains(err.Error(), "coordinator artifact mismatch") {
+		t.Fatalf("expected coordinator artifact mismatch, got %v", err)
+	}
+}
+
 func TestRunShowRejectsMissingOrMismatchedArtifacts(t *testing.T) {
 	t.Parallel()
 
@@ -510,6 +556,12 @@ type runGraphFixture struct {
 	reviewerTask *protocol.ChildTask
 }
 
+type partialReplanLineageFixture struct {
+	blockerPolicyFixture
+	replacementTask *protocol.ChildTask
+	replan          *protocol.PartialReplan
+}
+
 func seedRunGraphFixture(t *testing.T) runGraphFixture {
 	t.Helper()
 
@@ -558,6 +610,79 @@ func seedRunGraphFixture(t *testing.T) runGraphFixture {
 		run:          run,
 		backendTask:  backendTask,
 		reviewerTask: reviewerTask,
+	}
+}
+
+func seedPartialReplanLineageFixture(t *testing.T) partialReplanLineageFixture {
+	t.Helper()
+
+	fixture := seedBlockerPolicyFixture(t, 1)
+	store := mailbox.NewStore(fixture.cfg.Session.StateDir)
+	coordinatorStore := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir)
+
+	replacementTask, err := AddChildTask(fixture.cfg, store, ChildTaskRequest{
+		ParentRunID:    fixture.run.RunID,
+		Owner:          "backend-low",
+		Goal:           "Continue the blocked source task through a bounded replacement",
+		ExpectedOutput: "replacement task preserves source-task-local lineage",
+		ReviewRequired: fixture.sourceTask.ReviewRequired,
+	})
+	if err != nil {
+		t.Fatalf("add replacement task: %v", err)
+	}
+	writeTaskState(t, fixture.cfg.Session.StateDir, string(replacementTask.Owner), replacementTask.MessageID, replacementTask.ThreadID, protocol.FolderStateUnread, "idle")
+
+	blocker := createEscalatedBlockerCase(t, fixture.cfg.Session.StateDir, fixture.run.RunID, fixture.sourceTask, escalatedBlockerOptions{})
+	if err := coordinatorStore.UpdateBlockerCase(fixture.run.RunID, fixture.sourceTask.TaskID, func(existing *protocol.BlockerCase) error {
+		now := time.Now().UTC()
+		existing.Status = protocol.BlockerStatusResolved
+		existing.CurrentTaskID = replacementTask.TaskID
+		existing.CurrentMessageID = replacementTask.MessageID
+		existing.CurrentOwner = replacementTask.Owner
+		existing.Resolution = &protocol.BlockerResolution{
+			Action:           protocol.BlockerResolutionActionPartialReplan,
+			CreatedTaskID:    replacementTask.TaskID,
+			CreatedMessageID: replacementTask.MessageID,
+			ResolvedBy:       "human",
+			Note:             "replace the blocked work with a bounded follow-up",
+			CreatedAt:        now,
+		}
+		existing.ResolvedAt = &now
+		existing.UpdatedAt = now
+		existing.RecommendedAction = &protocol.RecommendedAction{
+			Kind: protocol.BlockerResolutionActionPartialReplan,
+			Note: blocker.RecommendedAction.Note,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateBlockerCase() unexpected error: %v", err)
+	}
+
+	now := time.Now().UTC()
+	replan := &protocol.PartialReplan{
+		RunID:                fixture.run.RunID,
+		SourceTaskID:         fixture.sourceTask.TaskID,
+		SourceMessageID:      fixture.sourceTask.MessageID,
+		BlockerSourceTaskID:  fixture.sourceTask.TaskID,
+		SupersededTaskID:     fixture.sourceTask.TaskID,
+		SupersededMessageID:  fixture.sourceTask.MessageID,
+		SupersededOwner:      fixture.sourceTask.Owner,
+		ReplacementTaskID:    replacementTask.TaskID,
+		ReplacementMessageID: replacementTask.MessageID,
+		ReplacementOwner:     replacementTask.Owner,
+		Reason:               "replace the blocked work with one bounded follow-up task",
+		Status:               protocol.PartialReplanStatusApplied,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	if err := coordinatorStore.CreatePartialReplan(replan); err != nil {
+		t.Fatalf("CreatePartialReplan() unexpected error: %v", err)
+	}
+
+	return partialReplanLineageFixture{
+		blockerPolicyFixture: fixture,
+		replacementTask:      replacementTask,
+		replan:               replan,
 	}
 }
 
@@ -781,5 +906,30 @@ func mutateBlockerCaseDocument(t *testing.T, stateDir string, runID protocol.Run
 	}
 	if err := os.WriteFile(path, updated, 0o644); err != nil {
 		t.Fatalf("write blocker case yaml: %v", err)
+	}
+}
+
+func mutatePartialReplanDocument(t *testing.T, stateDir string, runID protocol.RunID, sourceTaskID protocol.TaskID, mutate func(replanDoc map[string]any)) {
+	t.Helper()
+
+	path := mailbox.RunPartialReplanPath(stateDir, runID, sourceTaskID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read partial replan yaml: %v", err)
+	}
+
+	replanDoc := make(map[string]any)
+	if err := yaml.Unmarshal(data, &replanDoc); err != nil {
+		t.Fatalf("unmarshal partial replan yaml document: %v", err)
+	}
+
+	mutate(replanDoc)
+
+	updated, err := yaml.Marshal(replanDoc)
+	if err != nil {
+		t.Fatalf("marshal partial replan yaml document: %v", err)
+	}
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		t.Fatalf("write partial replan yaml: %v", err)
 	}
 }

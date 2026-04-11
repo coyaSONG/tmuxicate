@@ -328,6 +328,38 @@ func TestBuildRunSummaryCollapsesReviewAndRerouteArtifactsIntoSourceRows(t *test
 	}
 }
 
+func TestBuildRunSummaryCollapsesPartialReplanIntoSourceRow(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedPartialReplanLineageFixture(t)
+	graph := mustLoadRunGraph(t, fixture.cfg.Session.StateDir, fixture.run.RunID)
+
+	summary := BuildRunSummary(graph)
+	if len(summary.Items) != 1 {
+		t.Fatalf("summary item count = %d, want 1 logical source row", len(summary.Items))
+	}
+
+	item := mustFindSummaryItem(t, summary, fixture.sourceTask.TaskID)
+	if item.SourceTaskID != fixture.sourceTask.TaskID {
+		t.Fatalf("source task id = %q, want %q", item.SourceTaskID, fixture.sourceTask.TaskID)
+	}
+	if item.CurrentTaskID != fixture.replacementTask.TaskID {
+		t.Fatalf("current task id = %q, want %q", item.CurrentTaskID, fixture.replacementTask.TaskID)
+	}
+	if item.CurrentMessageID != fixture.replacementTask.MessageID {
+		t.Fatalf("current message id = %q, want %q", item.CurrentMessageID, fixture.replacementTask.MessageID)
+	}
+	if item.CurrentOwner != fixture.replacementTask.Owner {
+		t.Fatalf("current owner = %q, want %q", item.CurrentOwner, fixture.replacementTask.Owner)
+	}
+	if item.Owner != fixture.replacementTask.Owner {
+		t.Fatalf("owner = %q, want %q", item.Owner, fixture.replacementTask.Owner)
+	}
+	if hasSummaryItem(summary, fixture.replacementTask.TaskID) {
+		t.Fatalf("replacement task does not render as a second logical summary row")
+	}
+}
+
 func TestFormatRunSummaryGroupsItemsWithoutTaskDetailSprawl(t *testing.T) {
 	t.Parallel()
 

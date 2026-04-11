@@ -43,6 +43,61 @@ func TestBlockerResolveCommandRequiresAction(t *testing.T) {
 	}
 }
 
+func TestBlockerResolveCommandRequiresReplacementTaskFieldsForPartialReplan(t *testing.T) {
+	t.Parallel()
+
+	cmd := newRootCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"blocker",
+		"resolve",
+		"run_000000000001",
+		"task_000000000001",
+		"--state-dir",
+		t.TempDir(),
+		"--action",
+		"partial_replan",
+		"--reason",
+		"replace the blocked work with one bounded implementation task",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected partial_replan blocker resolve without replacement fields to fail")
+	}
+
+	requiredSnippets := []string{"task-class", "domains", "goal", "expected-output"}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(err.Error(), snippet) {
+			t.Fatalf("expected error to mention %q, got %q", snippet, err.Error())
+		}
+	}
+}
+
+func TestBlockerResolveHelpIncludesPartialReplanFlags(t *testing.T) {
+	t.Parallel()
+
+	cmd := newRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"blocker", "resolve", "--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("help command: %v", err)
+	}
+
+	output := stdout.String() + stderr.String()
+	requiredSnippets := []string{"partial_replan", "--task-class", "--domains", "--goal", "--expected-output"}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected help output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 func TestRunShowCommandPrintsSummaryUnderHeader(t *testing.T) {
 	fixture := seedCLISummaryFixture(t)
 
