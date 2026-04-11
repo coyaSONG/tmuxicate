@@ -237,6 +237,51 @@ type routeCandidate struct {
 	index int
 }
 
+type RoutePreview struct {
+	SelectedOwner protocol.AgentName
+	Placement     *protocol.TaskPlacement
+	Decision      *protocol.RoutingDecision
+}
+
+func PreviewRouteChildTask(cfg *config.ResolvedConfig, req protocol.RouteChildTaskRequest) (*RoutePreview, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("resolved config is required")
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	coordinatorStore := mailbox.NewCoordinatorStore(cfg.Session.StateDir)
+	run, err := coordinatorStore.ReadRun(req.RunID)
+	if err != nil {
+		return nil, err
+	}
+
+	duplicateKey := duplicateKeyForRoute(req.RunID, req.TaskClass, req.Domains)
+	existingDuplicate, err := findActiveDuplicateTask(cfg.Session.StateDir, req.RunID, duplicateKey)
+	if err != nil {
+		return nil, err
+	}
+	if existingDuplicate != nil && duplicatePolicyBlocks(cfg, req.TaskClass) {
+		return nil, duplicateRouteError(duplicateKey, existingDuplicate.TaskID)
+	}
+
+	selectedOwner, decision, err := selectRoutedOwner(cfg, run, req, existingDuplicate)
+	if err != nil {
+		return nil, err
+	}
+	placement, err := selectTaskPlacement(cfg, selectedOwner)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RoutePreview{
+		SelectedOwner: protocol.AgentName(selectedOwner.Name),
+		Placement:     placement,
+		Decision:      decision,
+	}, nil
+}
+
 func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protocol.RouteChildTaskRequest) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("resolved config is required")
@@ -269,11 +314,38 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 		return nil, nil, duplicateRouteError(duplicateKey, existingDuplicate.TaskID)
 	}
 
+	selectedOwner, decision, err := selectRoutedOwner(cfg, run, req, existingDuplicate)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, selectedOwner, ChildTaskRequest{
+		ParentRunID:       req.RunID,
+		Owner:             selectedOwner.Name,
+		Goal:              req.Goal,
+		ExpectedOutput:    req.ExpectedOutput,
+		ReviewRequired:    req.ReviewRequired,
+		TaskClass:         req.TaskClass,
+		Domains:           slices.Clone(req.Domains),
+		NormalizedDomains: slices.Clone(req.Domains),
+		DuplicateKey:      duplicateKey,
+		RoutingDecision:   *decision,
+		OverrideReason:    req.OverrideReason,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return task, decision, nil
+}
+
+func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun, req protocol.RouteChildTaskRequest, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
 	kindCandidates, domainCandidates := routeCandidates(cfg, run.AllowedOwners, req.TaskClass, req.Domains)
 	rankCandidates(kindCandidates)
 	rankCandidates(domainCandidates)
+
 	if req.OwnerOverride != "" {
-		return routeChildTaskOverride(cfg, store, coordinatorStore, req, run, kindCandidates, duplicateKey, existingDuplicate)
+		return routeChildTaskOverrideSelection(cfg, req, run, kindCandidates, existingDuplicate)
 	}
 	if len(domainCandidates) == 0 {
 		rejection := &protocol.RouteRejection{
@@ -308,6 +380,7 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 			}
 		}
 	}
+
 	decision := &protocol.RoutingDecision{
 		Status:        "selected",
 		SelectedOwner: protocol.AgentName(selected.agent.Name),
@@ -325,24 +398,7 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
 	}
 
-	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, selected.agent, ChildTaskRequest{
-		ParentRunID:       req.RunID,
-		Owner:             selected.agent.Name,
-		Goal:              req.Goal,
-		ExpectedOutput:    req.ExpectedOutput,
-		ReviewRequired:    req.ReviewRequired,
-		TaskClass:         req.TaskClass,
-		Domains:           slices.Clone(req.Domains),
-		NormalizedDomains: slices.Clone(req.Domains),
-		DuplicateKey:      duplicateKey,
-		RoutingDecision:   *decision,
-		OverrideReason:    req.OverrideReason,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return task, decision, nil
+	return selected.agent, decision, nil
 }
 
 type workflowMessageInput struct {
@@ -556,7 +612,7 @@ func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentN
 	return kindCandidates, domainCandidates
 }
 
-func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, coordinatorStore *mailbox.CoordinatorStore, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate, duplicateKey string, existingDuplicate *protocol.ChildTask) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
+func routeChildTaskOverrideSelection(cfg *config.ResolvedConfig, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
 	owner, err := resolveAgentConfig(cfg, string(req.OwnerOverride))
 	if err != nil {
 		return nil, nil, err
@@ -585,24 +641,7 @@ func routeChildTaskOverride(cfg *config.ResolvedConfig, store *mailbox.Store, co
 		return nil, nil, fmt.Errorf("validate routing decision: %w", err)
 	}
 
-	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, owner, ChildTaskRequest{
-		ParentRunID:       req.RunID,
-		Owner:             owner.Name,
-		Goal:              req.Goal,
-		ExpectedOutput:    req.ExpectedOutput,
-		ReviewRequired:    req.ReviewRequired,
-		TaskClass:         req.TaskClass,
-		Domains:           slices.Clone(req.Domains),
-		NormalizedDomains: slices.Clone(req.Domains),
-		DuplicateKey:      duplicateKey,
-		RoutingDecision:   *decision,
-		OverrideReason:    req.OverrideReason,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return task, decision, nil
+	return owner, decision, nil
 }
 
 func candidateNames(candidates []routeCandidate) []protocol.AgentName {

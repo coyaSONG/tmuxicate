@@ -256,6 +256,7 @@ func newRunRouteTaskCmd() *cobra.Command {
 	var reviewRequired bool
 	var ownerOverride string
 	var overrideReason string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "route-task",
@@ -267,7 +268,7 @@ func newRunRouteTaskCmd() *cobra.Command {
 				return err
 			}
 
-			task, decision, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), protocol.RouteChildTaskRequest{
+			req := protocol.RouteChildTaskRequest{
 				RunID:          protocol.RunID(runID),
 				TaskClass:      protocol.TaskClass(taskClass),
 				Domains:        domains,
@@ -276,32 +277,22 @@ func newRunRouteTaskCmd() *cobra.Command {
 				ReviewRequired: reviewRequired,
 				OwnerOverride:  protocol.AgentName(ownerOverride),
 				OverrideReason: overrideReason,
-			})
+			}
+
+			if dryRun {
+				preview, err := session.PreviewRouteChildTask(cfg, req)
+				if err != nil {
+					return err
+				}
+				return printRouteTaskSelection(cmd.OutOrStdout(), "", preview.SelectedOwner, preview.Placement, preview.Decision, true)
+			}
+
+			task, decision, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), req)
 			if err != nil {
 				return err
 			}
 
-			if _, err := fmt.Fprintln(cmd.OutOrStdout(), task.TaskID); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Selected Owner: %s\n", task.Owner); err != nil {
-				return err
-			}
-			if decision != nil && decision.Adaptive != nil && decision.Adaptive.Applied {
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Routing: %s\n", decision.Adaptive.Reason); err != nil {
-					return err
-				}
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Baseline: %s\n", decision.Adaptive.BaselineOwner); err != nil {
-					return err
-				}
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Score: historical=%d manual=%d total=%d\n", decision.Adaptive.HistoricalScore, decision.Adaptive.ManualWeight, decision.Adaptive.TotalScore); err != nil {
-					return err
-				}
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Adaptive Evidence: %s\n", formatAdaptiveEvidence(decision.Adaptive.Evidence)); err != nil {
-					return err
-				}
-			}
-			return nil
+			return printRouteTaskSelection(cmd.OutOrStdout(), string(task.TaskID), task.Owner, task.Placement, decision, false)
 		},
 	}
 
@@ -314,12 +305,67 @@ func newRunRouteTaskCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&reviewRequired, "review-required", false, "mark the child task as requiring review")
 	cmd.Flags().StringVar(&ownerOverride, "owner-override", "", "explicit owner override after routing review")
 	cmd.Flags().StringVar(&overrideReason, "override-reason", "", "reason for overriding routed owner selection")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview owner and execution target without creating task artifacts")
 	_ = cmd.MarkFlagRequired("run")
 	_ = cmd.MarkFlagRequired("task-class")
 	_ = cmd.MarkFlagRequired("domain")
 	_ = cmd.MarkFlagRequired("goal")
 	_ = cmd.MarkFlagRequired("expected-output")
 	return cmd
+}
+
+func printRouteTaskSelection(out io.Writer, taskID string, owner protocol.AgentName, placement *protocol.TaskPlacement, decision *protocol.RoutingDecision, previewOnly bool) error {
+	if previewOnly {
+		if _, err := fmt.Fprintln(out, "Preview Only: true"); err != nil {
+			return err
+		}
+	} else if strings.TrimSpace(taskID) != "" {
+		if _, err := fmt.Fprintln(out, taskID); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprintf(out, "Selected Owner: %s\n", owner); err != nil {
+		return err
+	}
+	if placement != nil {
+		if _, err := fmt.Fprintf(out, "Execution Target: %s\n", placement.Target.Name); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Target Kind: %s\n", placement.Target.Kind); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Target Capabilities: %s\n", formatExecutionTargetCapabilities(placement.Target.Capabilities)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Placement Reason: %s\n", placement.Reason); err != nil {
+			return err
+		}
+	}
+	if decision != nil && decision.Adaptive != nil && decision.Adaptive.Applied {
+		if _, err := fmt.Fprintf(out, "Adaptive Routing: %s\n", decision.Adaptive.Reason); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Adaptive Baseline: %s\n", decision.Adaptive.BaselineOwner); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Adaptive Score: historical=%d manual=%d total=%d\n", decision.Adaptive.HistoricalScore, decision.Adaptive.ManualWeight, decision.Adaptive.TotalScore); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "Adaptive Evidence: %s\n", formatAdaptiveEvidence(decision.Adaptive.Evidence)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func formatExecutionTargetCapabilities(capabilities []string) string {
+	if len(capabilities) == 0 {
+		return "-"
+	}
+
+	return strings.Join(capabilities, ", ")
 }
 
 func formatAdaptiveEvidence(evidence []protocol.AdaptiveRoutingEvidenceRef) string {

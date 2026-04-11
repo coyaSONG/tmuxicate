@@ -300,6 +300,12 @@ func FormatRunGraph(graph *RunGraph) string {
 	for _, task := range graph.Tasks {
 		fmt.Fprintf(&builder, "\nTask: %s\n", task.Task.TaskID)
 		fmt.Fprintf(&builder, "Owner: %s\n", task.Task.Owner)
+		if task.Task.Placement != nil {
+			fmt.Fprintf(&builder, "Execution Target: %s\n", task.Task.Placement.Target.Name)
+			fmt.Fprintf(&builder, "Target Kind: %s\n", task.Task.Placement.Target.Kind)
+			fmt.Fprintf(&builder, "Target Capabilities: %s\n", formatPlacementCapabilities(task.Task.Placement.Target.Capabilities))
+			fmt.Fprintf(&builder, "Placement Reason: %s\n", task.Task.Placement.Reason)
+		}
 		if task.Task.TaskClass != "" {
 			fmt.Fprintf(&builder, "Task Class: %s\n", task.Task.TaskClass)
 		}
@@ -383,6 +389,14 @@ func FormatRunGraph(graph *RunGraph) string {
 	}
 
 	return builder.String()
+}
+
+func formatPlacementCapabilities(capabilities []string) string {
+	if len(capabilities) == 0 {
+		return "-"
+	}
+
+	return strings.Join(capabilities, ", ")
 }
 
 func loadRunMessages(stateDir string) (map[protocol.MessageID]runMessageSummary, error) {
