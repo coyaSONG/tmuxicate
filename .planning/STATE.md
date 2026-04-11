@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Adaptive Coordination
-current_phase: 09
-current_phase_name: run-timeline-views
-current_plan: Complete
-status: completed
-stopped_at: Milestone v1.1 Adaptive Coordination complete
-last_updated: "2026-04-11T11:26:16.577Z"
+milestone: v1.2
+milestone_name: Remote Execution Foundations
+current_phase: 10
+current_phase_name: remote-transport-contracts
+current_plan: Not started
+status: ready
+stopped_at: Ready for Phase 10 planning
+last_updated: "2026-04-11T12:51:47Z"
 last_activity: 2026-04-11
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 6
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,22 +24,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Planning the next milestone after shipping v1.1 Adaptive Coordination
+**Current focus:** Milestone v1.2 Remote Execution Foundations is defined; Phase 10 planning is next
 
 ## Current Position
 
-Phase: 09 (run-timeline-views) — COMPLETE
-Current Phase: 09
-Current Phase Name: run-timeline-views
-Plan: 2 of 2
-Current Plan: Complete
+Phase: 10 (remote-transport-contracts) — READY
+Current Phase: 10
+Current Phase Name: remote-transport-contracts
+Plan: 0 of 2
+Current Plan: Not started
 Total Plans in Phase: 2
-Total Phases: 4
-Status: Milestone v1.1 Adaptive Coordination complete
+Total Phases: 3
+Status: Ready for Phase 10 planning
 Last activity: 2026-04-11
-Last Activity Description: v1.1 Adaptive Coordination milestone completed and archived
+Last Activity Description: v1.2 Remote Execution Foundations milestone initialized
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -126,12 +126,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Non-local execution still depends on operator-managed remote environments rather than a built-in transport layer
-- Timeline lifecycle completeness for non-local workers still depends on those workers writing durable `state.jsonl` events
-- Adaptive preferences still refresh only when the coordinator root task is completed
+- Remote target transport and authentication boundaries are still undefined in-product
+- Remote lifecycle parity must preserve operator trust; guessed or partial event synthesis is not acceptable
+- Multi-coordinator topology is intentionally deferred until the single-team remote execution path is explicit
 
 ## Session Continuity
 
-Last session: 2026-04-11T11:26:16.575Z
-Stopped at: Milestone v1.1 Adaptive Coordination complete
-Resume file: .planning/milestones/v1.1-MILESTONE-AUDIT.md
+Last session: 2026-04-11T12:51:47Z
+Stopped at: Ready for Phase 10 planning
+Resume file: .planning/ROADMAP.md

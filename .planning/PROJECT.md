@@ -12,9 +12,21 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 - Shipped `v1.0 Coordinator Automation` on 2026-04-11.
 - Shipped `v1.1 Adaptive Coordination` on 2026-04-11.
+- Opened `v1.2 Remote Execution Foundations` on 2026-04-11.
 - The latest shipped product supports adaptive routing signals, bounded partial replans, explicit remote or sandbox placement metadata, and filtered per-run timeline views.
 - The core architecture remains the same: `cmd/tmuxicate/main.go` wires the CLI, `internal/session/` owns user-facing workflows, `internal/mailbox/` persists durable state, `internal/runtime/daemon.go` handles local pane notifications, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries.
 - The major remaining product pressure is no longer “can coordinator automation work?”, but “how far can it expand without weakening inspectability or operational trust?”
+
+## Current Milestone: v1.2 Remote Execution Foundations
+
+**Goal:** Turn non-local execution-target metadata into concrete remote execution flows while preserving durable, inspectable coordination.
+
+**Target features:**
+
+- Concrete remote transport and dispatch contracts for non-local execution targets
+- Durable readiness, heartbeat, and capability visibility for remote targets
+- Remote task lifecycle events that preserve run timeline and `state.jsonl` inspection parity
+- Explicit operator controls for target disablement, recovery, and reroute decisions
 
 ## Requirements
 
@@ -38,10 +50,11 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ### Active
 
-- [ ] Coordinator can turn non-local execution-target metadata into concrete remote transport and provisioning flows
-- [ ] Coordinator can manage nested teams or multiple coordinators within one durable workflow graph
-- [ ] Operators can compare, rebalance, and inspect work across multiple coordinator runs or teams
-- [ ] Coordinator can evolve adaptive signals into richer inspectable recommendations or auto-tuning without hiding control boundaries
+- [ ] Coordinator can dispatch non-local work through a concrete remote transport path without breaking local pane-backed execution
+- [ ] Operator can inspect durable remote target readiness, heartbeat, and capability state before or during routing
+- [ ] Non-local execution can emit durable task lifecycle state needed by `run show`, summaries, and timeline views
+- [ ] Operator can explicitly disable, recover, or reroute around unhealthy targets while keeping routing decisions inspectable
+- [ ] Future topology work for nested teams, cross-run rebalancing, and richer adaptive recommendations remains deferred after remote execution foundations land
 
 ### Out of Scope
 
@@ -57,9 +70,9 @@ The codebase is now a brownfield Go CLI with two shipped coordinator milestones.
 
 ## Next Milestone Goals
 
-- Turn remote and sandbox execution targets from metadata plus local exclusion into concrete remote execution integration
-- Expand topology beyond one coordinator team while keeping run graphs and operator inspection explicit
-- Build richer cross-run operator insight and adaptive automation on top of the now-shipped timeline and placement model
+- Turn remote execution targets from metadata plus local exclusion into concrete transport and execution integration
+- Preserve run graph, receipt, and timeline inspection parity when work happens away from local tmux panes
+- Add explicit operator control over target health, availability, and recovery before expanding into multi-team topology
 
 ## Constraints
 
@@ -101,4 +114,4 @@ This document evolves at phase transitions and milestone boundaries.
 3. Archive milestone-scoped roadmap and requirements context
 
 ---
-*Last updated: 2026-04-11 after shipping v1.1 Adaptive Coordination*
+*Last updated: 2026-04-11 after opening v1.2 Remote Execution Foundations*
