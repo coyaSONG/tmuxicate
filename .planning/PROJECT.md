@@ -2,7 +2,7 @@
 
 ## What This Is
 
-`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. The current milestone extends that foundation with coordinator-driven automation for task decomposition, routing, review flow, blocker handling, and operator-facing run summaries.
+`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. As of `v1.0`, that foundation now includes coordinator-driven run decomposition, deterministic routing, linked review handoff, blocker escalation, and operator-facing run summaries built on the same durable mailbox model.
 
 ## Core Value
 
@@ -26,7 +26,11 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ### Active
 
-- None within the current v1 milestone scope
+- [ ] Coordinator learns routing preferences from prior runs without hiding why an owner was selected
+- [ ] Coordinator can partially re-plan a run after a blocker while preserving operator visibility and explicit escalation
+- [ ] Coordinator can manage nested teams or multiple coordinators without collapsing the current durable workflow model
+- [ ] Coordinator can target remote or sandboxed worker environments in addition to local `tmux` panes
+- [ ] Operator can inspect richer coordinator dashboards with per-run timelines and filtering
 
 ### Out of Scope
 
@@ -37,7 +41,20 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ## Context
 
-The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The current product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts, blocker escalation with durable blocker cases plus explicit operator resolution, and operator-facing run summaries rebuilt from the same durable run graph. The milestone is complete without introducing a replacement orchestration system.
+The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmuxicate/main.go` wires commands, `internal/session/` handles user-facing workflows, `internal/mailbox/` persists immutable messages and receipts, `internal/runtime/daemon.go` performs notification delivery, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries. The shipped `v1.0` product now proves the core mailbox and pane workflow, durable coordinator runs, deterministic role-based routing with duplicate-safe task assignment, a full implementation-to-review chain with linked reviewer responses rendered from durable artifacts, blocker escalation with durable blocker cases plus explicit operator resolution, and operator-facing run summaries rebuilt from the same durable run graph. The milestone shipped without introducing a replacement orchestration system.
+
+## Current State
+
+- Shipped `v1.0 Coordinator Automation` on 2026-04-11.
+- The current milestone archive covers 5 phases, 12 plans, and 28 execution tasks.
+- The repo now carries roughly 29k lines across Go, shell, YAML, and Markdown, with coordinator automation extending the existing mailbox runtime instead of replacing it.
+- The main remaining product pressure is not feature correctness in `v1.0`, but how to safely expand coordination depth without reducing operator visibility.
+
+## Next Milestone Goals
+
+- Add smarter coordination that can learn from prior runs and re-plan limited portions of a workflow after blockers.
+- Expand execution targets beyond local `tmux` panes while keeping the current durable mailbox and adapter contracts intact.
+- Improve operator visibility with richer run timelines and filtering so more automation does not make the system harder to inspect.
 
 ## Constraints
 
@@ -60,6 +77,7 @@ The existing codebase is a brownfield Go CLI with a layered structure: `cmd/tmux
 | Record reviewer outcomes through `tmuxicate review respond` and surface them in `run show` | Review decisions should stay visible through existing operator workflows instead of transcript-only context | ✓ Good |
 | Keep blocker handling on a dedicated `BlockerCase` artifact with code-driven action selection and explicit `blocker resolve` responses | Blocked work must remain durable, inspectable, ceiling-bounded, and human-escalatable without heuristic coordinator behavior | ✓ Good |
 | Keep run summaries as a derived `RunGraph` projection rendered through `run show` and root completion output | Operator summaries must stay inspectable, additive to existing detail, and free of new summary persistence/state machines | ✓ Good |
+| Ship coordinator automation as `v1.0` before attempting adaptive routing or remote worker expansion | The current foundation is strong enough to validate operator-facing workflow value before adding smarter or broader execution behavior | ✓ Good |
 
 ## Evolution
 
@@ -79,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after Phase 05 completion*
+*Last updated: 2026-04-11 after v1.0 milestone completion*
