@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Remote Execution Foundations
-current_phase: 10
-current_phase_name: remote-transport-contracts
-current_plan: Not started
-status: ready
-stopped_at: Ready for Phase 10 planning
-last_updated: "2026-04-11T12:51:47Z"
+current_phase: 12
+current_phase_name: operator-target-control
+current_plan: Complete
+status: completed
+stopped_at: Milestone v1.2 Remote Execution Foundations complete
+last_updated: "2026-04-11T13:27:52Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -24,28 +24,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Milestone v1.2 Remote Execution Foundations is defined; Phase 10 planning is next
+**Current focus:** Planning the next milestone after shipping v1.2 Remote Execution Foundations
 
 ## Current Position
 
-Phase: 10 (remote-transport-contracts) — READY
-Current Phase: 10
-Current Phase Name: remote-transport-contracts
-Plan: 0 of 2
-Current Plan: Not started
+Phase: 12 (operator-target-control) — COMPLETE
+Current Phase: 12
+Current Phase Name: operator-target-control
+Plan: 2 of 2
+Current Plan: Complete
 Total Plans in Phase: 2
 Total Phases: 3
-Status: Ready for Phase 10 planning
+Status: Milestone v1.2 Remote Execution Foundations complete
 Last activity: 2026-04-11
-Last Activity Description: v1.2 Remote Execution Foundations milestone initialized
+Last Activity Description: v1.2 Remote Execution Foundations milestone completed and archived
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 18
+- Total plans completed: 24
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -62,11 +62,14 @@ Progress: [░░░░░░░░░░] 0%
 | 07 | 2 | 6m | 3m |
 | 08 | 2 | 8m | 4m |
 | 09 | 2 | 8m | 4m |
+| 10 | 2 | 35m | 17.5m |
+| 11 | 2 | 30m | 15m |
+| 12 | 2 | 24m | 12m |
 
 **Recent Trend:**
 
-- Last 5 plans: 4min, 2min, 4min, 5min, 3min
-- Trend: Faster terminal plan execution
+- Last 5 plans: 20min, 12min, 18min, 10min, 14min
+- Trend: Stable execution speed with heavier runtime integration work
 
 | Phase 01 P03 | 8min | 2 tasks | 3 files |
 | Phase 02 P01 | 9min | 2 tasks | 12 files |
@@ -81,6 +84,12 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08 P02 | 4m | 3 tasks | 9 files |
 | Phase 09 P01 | 5m | 2 tasks | 2 files |
 | Phase 09 P02 | 3m | 2 tasks | 4 files |
+| Phase 10 P01 | 15m | 3 tasks | 5 files |
+| Phase 10 P02 | 20m | 3 tasks | 4 files |
+| Phase 11 P01 | 12m | 3 tasks | 3 files |
+| Phase 11 P02 | 18m | 3 tasks | 5 files |
+| Phase 12 P01 | 10m | 3 tasks | 2 files |
+| Phase 12 P02 | 14m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -119,6 +128,12 @@ Recent decisions affecting current work:
 - [Phase 09]: Timeline filters derive owner, state, class, and target fields strictly from durable task metadata with a stable local fallback.
 - [Phase 09]: Run show remains the canonical inspection surface; timeline rendering is additive and timeline-only reuses the same formatter path.
 - [Phase 09]: Any timeline filter flag implies timeline mode so operators can narrow output without adding a second reporting command.
+- [Phase 10]: Non-local execution dispatch is modeled as a target-scoped command contract plus durable dispatch records under the existing state tree.
+- [Phase 10]: Dispatch runs only after canonical task artifacts are persisted, so remote launch failure cannot erase routed work.
+- [Phase 11]: Target health is derived from durable heartbeat state and timeout policy instead of tmux-native remote probes.
+- [Phase 11]: Remote lifecycle parity stays on the existing mailbox/task/state event contract; target-aware routing evidence is additive.
+- [Phase 12]: Operator target control lives in a dedicated `tmuxicate target` command family with durable enable/disable state.
+- [Phase 12]: Re-enabling a target redispatches unread pending work only, keeping recovery bounded and inspectable.
 
 ### Pending Todos
 
@@ -126,12 +141,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Remote target transport and authentication boundaries are still undefined in-product
-- Remote lifecycle parity must preserve operator trust; guessed or partial event synthesis is not acceptable
-- Multi-coordinator topology is intentionally deferred until the single-team remote execution path is explicit
+- Richer authenticated remote transport and worker bootstrap boundaries are still undefined in-product
+- Remote lifecycle parity still depends on remote workers using the canonical CLI/state event contract
+- Multi-coordinator topology and cross-run rebalancing remain intentionally deferred
 
 ## Session Continuity
 
-Last session: 2026-04-11T12:51:47Z
-Stopped at: Ready for Phase 10 planning
-Resume file: .planning/ROADMAP.md
+Last session: 2026-04-11T13:27:52Z
+Stopped at: Milestone v1.2 Remote Execution Foundations complete
+Resume file: .planning/milestones/v1.2-MILESTONE-AUDIT.md

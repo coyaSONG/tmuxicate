@@ -2,7 +2,7 @@
 
 ## What This Is
 
-`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. As of `v1.1`, that workflow now includes durable coordinator runs, deterministic and adaptive routing, linked review and blocker recovery flows, explicit execution-target placement, and timeline-based operator inspection built on the same mailbox-backed state model.
+`tmuxicate` is a Go CLI for running multiple AI coding agents side by side in `tmux` with a durable, file-backed coordination layer. It gives each agent a pane, mailbox, and task workflow so a human operator can watch work happen, intervene when needed, and keep coordination reliable rather than implicit. As of `v1.2`, that workflow now includes durable coordinator runs, deterministic and adaptive routing, linked review and blocker recovery flows, explicit execution-target placement, concrete non-pane target dispatch, durable target health, and operator target control built on the same mailbox-backed state model.
 
 ## Core Value
 
@@ -12,21 +12,10 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 - Shipped `v1.0 Coordinator Automation` on 2026-04-11.
 - Shipped `v1.1 Adaptive Coordination` on 2026-04-11.
-- Opened `v1.2 Remote Execution Foundations` on 2026-04-11.
-- The latest shipped product supports adaptive routing signals, bounded partial replans, explicit remote or sandbox placement metadata, and filtered per-run timeline views.
+- Shipped `v1.2 Remote Execution Foundations` on 2026-04-11.
+- The latest shipped product supports operator-configured non-pane target dispatch, durable target heartbeat and availability state, explicit enable/disable and recovery flows, and target-aware routing evidence on top of the existing adaptive run graph and timeline model.
 - The core architecture remains the same: `cmd/tmuxicate/main.go` wires the CLI, `internal/session/` owns user-facing workflows, `internal/mailbox/` persists durable state, `internal/runtime/daemon.go` handles local pane notifications, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries.
-- The major remaining product pressure is no longer “can coordinator automation work?”, but “how far can it expand without weakening inspectability or operational trust?”
-
-## Current Milestone: v1.2 Remote Execution Foundations
-
-**Goal:** Turn non-local execution-target metadata into concrete remote execution flows while preserving durable, inspectable coordination.
-
-**Target features:**
-
-- Concrete remote transport and dispatch contracts for non-local execution targets
-- Durable readiness, heartbeat, and capability visibility for remote targets
-- Remote task lifecycle events that preserve run timeline and `state.jsonl` inspection parity
-- Explicit operator controls for target disablement, recovery, and reroute decisions
+- The major remaining product pressure is now “how far can remote execution and multi-team topology expand without weakening inspectability or operational trust?”
 
 ## Requirements
 
@@ -47,32 +36,37 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 - ✓ Coordinator can create bounded partial replans that preserve blocker and replacement lineage
 - ✓ Coordinator can persist explicit execution-target placement for local, remote, and sandboxed workers without breaking current local workflows
 - ✓ Operator can inspect filtered per-run timelines derived from durable artifacts and `state.jsonl`
+- ✓ Coordinator can dispatch non-local work through operator-configured target commands while preserving canonical run and routing artifacts
+- ✓ Operator can inspect durable target readiness, heartbeat, and capability state before or during routing
+- ✓ Non-local workers can reuse the canonical task lifecycle contract so run summaries and timelines stay rebuildable
+- ✓ Operator can explicitly disable, recover, and reroute around unhealthy targets while keeping routing decisions inspectable
 
 ### Active
 
-- [ ] Coordinator can dispatch non-local work through a concrete remote transport path without breaking local pane-backed execution
-- [ ] Operator can inspect durable remote target readiness, heartbeat, and capability state before or during routing
-- [ ] Non-local execution can emit durable task lifecycle state needed by `run show`, summaries, and timeline views
-- [ ] Operator can explicitly disable, recover, or reroute around unhealthy targets while keeping routing decisions inspectable
-- [ ] Future topology work for nested teams, cross-run rebalancing, and richer adaptive recommendations remains deferred after remote execution foundations land
+- [ ] Coordinator can support richer authenticated remote transport adapters without replacing the mailbox-backed coordination model
+- [ ] Coordinator can bootstrap or register remote workers with less manual shared-state setup while keeping operator control explicit
+- [ ] Coordinator can manage nested teams or multiple coordinators within one durable workflow graph
+- [ ] Operators can compare, rebalance, and inspect work across multiple coordinator runs or teams
+- [ ] Coordinator can evolve adaptive signals into richer inspectable recommendations or auto-tuning without hiding control boundaries
 
 ### Out of Scope
 
 - Fully autonomous long-horizon planning without human steering
 - Unbounded agent-to-agent chatter or opaque side channels outside the mailbox model
 - Replacing the mailbox protocol with a separate orchestration backend
+- Fully managed remote infrastructure provisioning baked into the coordinator
 - Vendor-specific orchestration tied to a single model provider
 - Coordinator directly replacing specialist agents as the primary implementer
 
 ## Context
 
-The codebase is now a brownfield Go CLI with two shipped coordinator milestones. `v1.0` proved durable coordinator decomposition, routing, review handoff, blocker escalation, and run summaries. `v1.1` extended that same run graph with adaptive routing evidence, bounded partial replans, execution-target placement metadata, and timeline projections without introducing a replacement backend. The product remains intentionally conservative: durable artifacts and operator visibility outrank hidden autonomy.
+The codebase is now a brownfield Go CLI with three shipped coordinator milestones. `v1.0` proved durable coordinator decomposition, routing, review handoff, blocker escalation, and run summaries. `v1.1` extended that same run graph with adaptive routing evidence, bounded partial replans, execution-target placement metadata, and timeline projections without introducing a replacement backend. `v1.2` turned non-local target metadata into a concrete command-dispatch path with durable target health and operator control, while keeping remote workers on the same mailbox and task-state contract. The product remains intentionally conservative: durable artifacts and operator visibility outrank hidden autonomy.
 
 ## Next Milestone Goals
 
-- Turn remote execution targets from metadata plus local exclusion into concrete transport and execution integration
-- Preserve run graph, receipt, and timeline inspection parity when work happens away from local tmux panes
-- Add explicit operator control over target health, availability, and recovery before expanding into multi-team topology
+- Expand beyond command-based shared-state dispatch into richer authenticated remote transport and worker bootstrap
+- Support multi-team or multi-coordinator topology without weakening run-graph inspectability
+- Build cross-run operator insight and rebalancing on top of the shipped target health and timeline surfaces
 
 ## Constraints
 
@@ -98,6 +92,10 @@ The codebase is now a brownfield Go CLI with two shipped coordinator milestones.
 | Only pane-backed local agents participate in tmux lifecycle and daemon notifications | Non-local targets should not pretend to be local panes | ✓ Good |
 | Timeline rebuild validates TaskEvent ownership and thread linkage against canonical artifacts | Operator history must fail loudly on drift instead of guessing | ✓ Good |
 | `run show` remains the single inspection surface; timeline rendering is additive and timeline-only reuses the same formatter path | Visibility should deepen without fragmenting workflows into parallel tools | ✓ Good |
+| Non-local execution dispatch is a target-scoped command contract layered onto the existing mailbox/run graph | Remote execution should extend current artifacts rather than introduce a second coordinator backend | ✓ Good |
+| Target health is persisted as durable target state plus heartbeat logs | Operators need inspectable health history without depending on tmux-only probes | ✓ Good |
+| Remote lifecycle parity reuses the existing task lifecycle and `state.jsonl` contract | Summaries and timelines must rebuild from one canonical event model | ✓ Good |
+| Target recovery redispatches only unread pending work when a target is re-enabled | Recovery must stay bounded and explicit instead of replaying arbitrary historical work | ✓ Good |
 
 ## Evolution
 
@@ -114,4 +112,4 @@ This document evolves at phase transitions and milestone boundaries.
 3. Archive milestone-scoped roadmap and requirements context
 
 ---
-*Last updated: 2026-04-11 after opening v1.2 Remote Execution Foundations*
+*Last updated: 2026-04-11 after shipping v1.2 Remote Execution Foundations*

@@ -49,3 +49,29 @@
 **What's next:** Turn non-local target metadata into concrete remote execution integration, expand to multi-coordinator topology, and evolve adaptive signals into richer inspectable automation.
 
 ---
+
+## v1.2 Remote Execution Foundations (Shipped: 2026-04-11)
+
+**Delivered:** The first concrete remote execution foundation for `tmuxicate`, turning non-local target metadata into command-based dispatch, durable target health, and explicit operator control while preserving mailbox-backed coordinator artifacts.
+
+**Phases completed:** 10-12 (6 plans total)
+
+**Key accomplishments:**
+- Added target transport contracts with dispatch commands, per-target runtime state, and durable dispatch records for non-pane execution targets.
+- Shipped concrete non-local dispatch on routed task creation with a stable environment contract and non-fatal dispatch failure handling.
+- Added target heartbeat, timeout-based availability derivation, and target visibility in `status` plus a dedicated `tmuxicate target` command family.
+- Made routing target-aware with durable excluded-target evidence and operator-visible rejection reasons.
+- Added explicit disable, enable, heartbeat, and bounded redispatch flows so operators can recover targets without mutating run history.
+- Verified milestone integration with a passed `v1.2` milestone audit and a passing `go test ./...` suite.
+
+**Stats:**
+- 15 files changed
+- 1,553 insertions and 38 deletions across the milestone range
+- 3 phases, 6 plans, 18 tasks
+- 1 calendar day from milestone definition to shipment (2026-04-11 → 2026-04-11)
+
+**Git range:** `docs: define milestone v1.2 requirements` → `feat: add remote target dispatch and control`
+
+**What's next:** Define the next milestone around richer authenticated transport, multi-coordinator topology, and cross-run operator control on top of the shipped target runtime model.
+
+---
