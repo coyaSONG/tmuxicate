@@ -81,10 +81,24 @@ const (
 )
 
 type AgentSnapshot struct {
-	Name      AgentName `yaml:"name"`
-	Alias     string    `yaml:"alias"`
-	Role      string    `yaml:"role"`
-	Teammates []string  `yaml:"teammates,omitempty"`
+	Name            AgentName       `yaml:"name"`
+	Alias           string          `yaml:"alias"`
+	Role            string          `yaml:"role"`
+	Teammates       []string        `yaml:"teammates,omitempty"`
+	ExecutionTarget ExecutionTarget `yaml:"execution_target,omitempty"`
+}
+
+type ExecutionTarget struct {
+	Name         string   `yaml:"name"`
+	Kind         string   `yaml:"kind"`
+	Description  string   `yaml:"description,omitempty"`
+	Capabilities []string `yaml:"capabilities,omitempty"`
+	PaneBacked   bool     `yaml:"pane_backed"`
+}
+
+type TaskPlacement struct {
+	Target ExecutionTarget `yaml:"target"`
+	Reason string          `yaml:"reason"`
 }
 
 type CoordinatorRun struct {
@@ -117,6 +131,8 @@ type ChildTask struct {
 	DuplicateKey string `yaml:"duplicate_key,omitempty"`
 	// RoutingDecision persists as `yaml:"routing_decision"` when route metadata is present.
 	RoutingDecision *RoutingDecision `yaml:"routing_decision,omitempty"`
+	// Placement persists as `yaml:"placement"` when execution target metadata is available.
+	Placement *TaskPlacement `yaml:"placement,omitempty"`
 	// OverrideReason persists as `yaml:"override_reason"` when route metadata is present.
 	OverrideReason string    `yaml:"override_reason,omitempty"`
 	MessageID      MessageID `yaml:"message_id,omitempty"`

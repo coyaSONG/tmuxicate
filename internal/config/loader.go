@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
@@ -209,6 +210,31 @@ func (c *Config) Validate() error {
 
 	knownAgents := make(map[string]struct{}, len(c.Agents))
 	knownAliases := make(map[string]struct{}, len(c.Agents))
+	knownTargets := make(map[string]struct{}, len(c.ExecutionTargets))
+	for i := range c.ExecutionTargets {
+		target := &c.ExecutionTargets[i]
+		prefix := fmt.Sprintf("execution_targets[%d]", i)
+
+		target.Name = strings.TrimSpace(target.Name)
+		if target.Name == "" {
+			return fmt.Errorf("%s.name is required", prefix)
+		}
+		if _, ok := knownTargets[target.Name]; ok {
+			return fmt.Errorf("duplicate execution target name %q", target.Name)
+		}
+		target.Kind = strings.TrimSpace(target.Kind)
+		if !isValidExecutionTargetKind(target.Kind) {
+			return fmt.Errorf("invalid %s.kind %q", prefix, target.Kind)
+		}
+		target.Description = strings.TrimSpace(target.Description)
+
+		capabilities, err := normalizeExecutionTargetCapabilities(target.Capabilities)
+		if err != nil {
+			return fmt.Errorf("%s.capabilities: %w", prefix, err)
+		}
+		target.Capabilities = capabilities
+		knownTargets[target.Name] = struct{}{}
+	}
 	for i := range c.Agents {
 		agent := &c.Agents[i]
 		prefix := fmt.Sprintf("agents[%d]", i)
@@ -253,6 +279,12 @@ func (c *Config) Validate() error {
 		agent.Role.Domains = normalizedDomains
 		if agent.RoutePriority < 0 {
 			return fmt.Errorf("%s.route_priority must be >= 0", prefix)
+		}
+		agent.ExecutionTarget = strings.TrimSpace(agent.ExecutionTarget)
+		if agent.ExecutionTarget != "" {
+			if _, ok := knownTargets[agent.ExecutionTarget]; !ok {
+				return fmt.Errorf("%s.execution_target %q references unknown execution target", prefix, agent.ExecutionTarget)
+			}
 		}
 		if strings.TrimSpace(agent.Pane.Slot) == "" {
 			return fmt.Errorf("%s.pane.slot is required", prefix)
@@ -402,6 +434,15 @@ func (c *Config) clone() Config {
 			clone.Blockers.MaxReroutesByTaskClass[taskClass] = maxReroutes
 		}
 	}
+	if c.ExecutionTargets != nil {
+		clone.ExecutionTargets = make([]ExecutionTargetConfig, len(c.ExecutionTargets))
+		copy(clone.ExecutionTargets, c.ExecutionTargets)
+		for i := range c.ExecutionTargets {
+			if c.ExecutionTargets[i].Capabilities != nil {
+				clone.ExecutionTargets[i].Capabilities = append([]string(nil), c.ExecutionTargets[i].Capabilities...)
+			}
+		}
+	}
 	if c.Agents != nil {
 		clone.Agents = make([]AgentConfig, len(c.Agents))
 		copy(clone.Agents, c.Agents)
@@ -453,6 +494,38 @@ func isValidLayout(s string) bool {
 	default:
 		return false
 	}
+}
+
+func isValidExecutionTargetKind(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case "local", "remote", "sandbox":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeExecutionTargetCapabilities(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for i, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, fmt.Errorf("capabilities[%d] must not be blank", i)
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	sort.Strings(normalized)
+	return normalized, nil
 }
 
 func boolPtr(v bool) *bool {

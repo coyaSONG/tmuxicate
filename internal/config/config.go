@@ -39,14 +39,23 @@ func (d Duration) MarshalYAML() (any, error) {
 }
 
 type Config struct {
-	Version    int              `yaml:"version"`
-	Session    SessionConfig    `yaml:"session"`
-	Delivery   DeliveryConfig   `yaml:"delivery"`
-	Transcript TranscriptConfig `yaml:"transcript"`
-	Routing    RoutingConfig    `yaml:"routing"`
-	Blockers   BlockersConfig   `yaml:"blockers"`
-	Defaults   DefaultsConfig   `yaml:"defaults"`
-	Agents     []AgentConfig    `yaml:"agents"`
+	Version          int                     `yaml:"version"`
+	Session          SessionConfig           `yaml:"session"`
+	Delivery         DeliveryConfig          `yaml:"delivery"`
+	Transcript       TranscriptConfig        `yaml:"transcript"`
+	Routing          RoutingConfig           `yaml:"routing"`
+	Blockers         BlockersConfig          `yaml:"blockers"`
+	Defaults         DefaultsConfig          `yaml:"defaults"`
+	ExecutionTargets []ExecutionTargetConfig `yaml:"execution_targets,omitempty"`
+	Agents           []AgentConfig           `yaml:"agents"`
+}
+
+type ExecutionTargetConfig struct {
+	Name         string   `yaml:"name"`
+	Kind         string   `yaml:"kind"`
+	Description  string   `yaml:"description,omitempty"`
+	Capabilities []string `yaml:"capabilities,omitempty"`
+	PaneBacked   bool     `yaml:"pane_backed"`
 }
 
 type SessionConfig struct {
@@ -73,9 +82,9 @@ type TranscriptConfig struct {
 }
 
 type RoutingConfig struct {
-	Coordinator          string               `yaml:"coordinator"`
-	ExclusiveTaskClasses []protocol.TaskClass `yaml:"exclusive_task_classes"`
-	FanoutTaskClasses    []protocol.TaskClass `yaml:"fanout_task_classes"`
+	Coordinator          string                `yaml:"coordinator"`
+	ExclusiveTaskClasses []protocol.TaskClass  `yaml:"exclusive_task_classes"`
+	FanoutTaskClasses    []protocol.TaskClass  `yaml:"fanout_task_classes"`
 	Adaptive             AdaptiveRoutingConfig `yaml:"adaptive"`
 }
 
@@ -139,16 +148,17 @@ func (r RoleSpec) String() string {
 }
 
 type AgentConfig struct {
-	Name          string          `yaml:"name"`
-	Alias         string          `yaml:"alias"`
-	Adapter       string          `yaml:"adapter"`
-	Command       string          `yaml:"command"`
-	Role          RoleSpec        `yaml:"role"`
-	RoutePriority int             `yaml:"route_priority"`
-	Pane          PaneConfig      `yaml:"pane"`
-	Teammates     []string        `yaml:"teammates"`
-	Bootstrap     BootstrapConfig `yaml:"bootstrap"`
-	Workdir       string          `yaml:"workdir,omitempty"`
+	Name            string          `yaml:"name"`
+	Alias           string          `yaml:"alias"`
+	Adapter         string          `yaml:"adapter"`
+	Command         string          `yaml:"command"`
+	Role            RoleSpec        `yaml:"role"`
+	RoutePriority   int             `yaml:"route_priority"`
+	ExecutionTarget string          `yaml:"execution_target,omitempty"`
+	Pane            PaneConfig      `yaml:"pane"`
+	Teammates       []string        `yaml:"teammates"`
+	Bootstrap       BootstrapConfig `yaml:"bootstrap"`
+	Workdir         string          `yaml:"workdir,omitempty"`
 }
 
 type BootstrapConfig struct {

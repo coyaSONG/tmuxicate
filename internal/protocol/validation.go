@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -197,6 +198,12 @@ func (r *CoordinatorRun) Validate() error {
 		if strings.TrimSpace(snapshot.Role) == "" {
 			return fmt.Errorf("team_snapshot[%d].role is required", i)
 		}
+		if hasExecutionTargetMetadata(snapshot.ExecutionTarget) {
+			if err := validateExecutionTarget(&snapshot.ExecutionTarget); err != nil {
+				return fmt.Errorf("team_snapshot[%d].execution_target: %w", i, err)
+			}
+			r.TeamSnapshot[i].ExecutionTarget = snapshot.ExecutionTarget
+		}
 		for j, teammate := range snapshot.Teammates {
 			if strings.TrimSpace(teammate) == "" {
 				return fmt.Errorf("team_snapshot[%d].teammates[%d] is required", i, j)
@@ -239,6 +246,11 @@ func (t *ChildTask) Validate() error {
 	}
 	if t.CreatedAt.IsZero() {
 		return errors.New("created_at is required")
+	}
+	if t.Placement != nil {
+		if err := validateTaskPlacement(t.Placement); err != nil {
+			return fmt.Errorf("placement: %w", err)
+		}
 	}
 	if childTaskHasRoutingMetadata(t) {
 		if err := t.TaskClass.Validate(); err != nil {
@@ -287,6 +299,56 @@ func (t *ChildTask) Validate() error {
 	}
 
 	return nil
+}
+
+func validateTaskPlacement(placement *TaskPlacement) error {
+	if placement == nil {
+		return nil
+	}
+	if err := validateExecutionTarget(&placement.Target); err != nil {
+		return fmt.Errorf("target: %w", err)
+	}
+	placement.Reason = strings.TrimSpace(placement.Reason)
+	if placement.Reason == "" {
+		return errors.New("reason is required")
+	}
+
+	return nil
+}
+
+func validateExecutionTarget(target *ExecutionTarget) error {
+	if target == nil {
+		return errors.New("execution target is required")
+	}
+
+	target.Name = strings.TrimSpace(target.Name)
+	if target.Name == "" {
+		return errors.New("name is required")
+	}
+	target.Kind = strings.TrimSpace(target.Kind)
+	if target.Kind == "" {
+		return errors.New("kind is required")
+	}
+	if !isValidExecutionTargetKind(target.Kind) {
+		return fmt.Errorf("kind %q is invalid", target.Kind)
+	}
+	target.Description = strings.TrimSpace(target.Description)
+
+	capabilities, err := normalizeExecutionTargetCapabilities(target.Capabilities)
+	if err != nil {
+		return err
+	}
+	target.Capabilities = capabilities
+
+	return nil
+}
+
+func hasExecutionTargetMetadata(target ExecutionTarget) bool {
+	return strings.TrimSpace(target.Name) != "" ||
+		strings.TrimSpace(target.Kind) != "" ||
+		strings.TrimSpace(target.Description) != "" ||
+		len(target.Capabilities) > 0 ||
+		target.PaneBacked
 }
 
 func (h *ReviewHandoff) Validate() error {
@@ -1021,6 +1083,38 @@ func childTaskHasRoutingMetadata(task *ChildTask) bool {
 		strings.TrimSpace(task.DuplicateKey) != "" ||
 		task.RoutingDecision != nil ||
 		strings.TrimSpace(task.OverrideReason) != ""
+}
+
+func isValidExecutionTargetKind(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case "local", "remote", "sandbox":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeExecutionTargetCapabilities(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for i, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, fmt.Errorf("capabilities[%d] must not be blank", i)
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+
+	sort.Strings(normalized)
+	return normalized, nil
 }
 
 func isGeneratedTaskID(id TaskID) bool {

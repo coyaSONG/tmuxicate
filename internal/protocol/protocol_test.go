@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
