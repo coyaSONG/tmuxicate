@@ -140,6 +140,77 @@ func TestRunShowCommandPrintsSummaryUnderHeader(t *testing.T) {
 	}
 }
 
+func TestRunShowCommandPrintsTimelineSectionWithExplicitFilters(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedCLITimelineFixture(t)
+
+	output, err := executeRootCommand(t,
+		"run",
+		"show",
+		string(fixture.run.RunID),
+		"--config",
+		fixture.configPath,
+		"--timeline",
+		"--timeline-owner",
+		"backend",
+		"--timeline-state",
+		"idle",
+		"--timeline-class",
+		"implementation",
+		"--timeline-target",
+		"sandbox",
+	)
+	if err != nil {
+		t.Fatalf("run show timeline command: %v", err)
+	}
+
+	requiredSnippets := []string{
+		"Timeline:\n",
+		"Timeline Filters: owner=backend state=idle class=implementation target=sandbox",
+		"owner=backend",
+		"state=idle",
+		"class=implementation",
+		"target=sandbox",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected timeline output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
+func TestRunShowCommandTimelineOnlyOmitsTaskBlocks(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedCLITimelineFixture(t)
+
+	output, err := executeRootCommand(t,
+		"run",
+		"show",
+		string(fixture.run.RunID),
+		"--config",
+		fixture.configPath,
+		"--timeline-only",
+	)
+	if err != nil {
+		t.Fatalf("run show timeline-only command: %v", err)
+	}
+
+	if !strings.HasPrefix(output, "Run: "+string(fixture.run.RunID)+"\n") {
+		t.Fatalf("expected timeline-only output to start with run header\noutput:\n%s", output)
+	}
+	if !strings.Contains(output, "Summary:\n") {
+		t.Fatalf("expected timeline-only output to keep summary block\noutput:\n%s", output)
+	}
+	if !strings.Contains(output, "Timeline:\n") {
+		t.Fatalf("expected timeline-only output to include timeline block\noutput:\n%s", output)
+	}
+	if strings.Contains(output, "\nTask: ") {
+		t.Fatalf("expected timeline-only output to omit task detail blocks\noutput:\n%s", output)
+	}
+}
+
 func TestTaskDoneCommandPrintsSummaryOnlyForRootRunCompletion(t *testing.T) {
 	t.Run("non-root child task prints done only", func(t *testing.T) {
 		fixture := seedCLIChildTaskFixture(t)
@@ -465,6 +536,14 @@ type adaptiveRoutingCLIFixture struct {
 	childTask  *protocol.ChildTask
 }
 
+type cliTimelineFixture struct {
+	cfg        *config.ResolvedConfig
+	configPath string
+	run        *protocol.CoordinatorRun
+	sourceTask *protocol.ChildTask
+	localTask  *protocol.ChildTask
+}
+
 func seedCLISummaryFixture(t *testing.T) cliSummaryFixture {
 	t.Helper()
 
@@ -546,6 +625,64 @@ func seedCLIChildTaskFixture(t *testing.T) cliChildTaskFixture {
 		configPath: configPath,
 		run:        run,
 		childTask:  childTask,
+	}
+}
+
+func seedCLITimelineFixture(t *testing.T) cliTimelineFixture {
+	t.Helper()
+
+	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := session.Run(cfg, store, session.RunRequest{
+		Goal:        "Render timeline output through the existing run show workflow",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	sourceTask, _, err := session.RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"protocol", "session"},
+		Goal:           "Render sandboxed implementation timeline output",
+		ExpectedOutput: "timeline rows include durable owner/state/class/target fields",
+		ReviewRequired: false,
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+	if _, err := session.ReadMsg(cfg.Session.StateDir, string(sourceTask.Owner), sourceTask.MessageID); err != nil {
+		t.Fatalf("activate source task: %v", err)
+	}
+	if err := session.TaskDone(cfg.Session.StateDir, string(sourceTask.Owner), sourceTask.MessageID, "sandbox implementation complete"); err != nil {
+		t.Fatalf("complete source task: %v", err)
+	}
+
+	localTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+		ParentRunID:    run.RunID,
+		Owner:          "reviewer",
+		Goal:           "Leave one durable local task active for timeline noise filtering",
+		ExpectedOutput: "timeline-only output still suppresses task blocks",
+	})
+	if err != nil {
+		t.Fatalf("add local task: %v", err)
+	}
+	if err := session.TaskAccept(cfg.Session.StateDir, "reviewer", localTask.MessageID); err != nil {
+		t.Fatalf("accept local task: %v", err)
+	}
+	if err := session.TaskWait(cfg.Session.StateDir, "reviewer", localTask.MessageID, protocol.WaitKindExternalEvent, "human", "waiting on one local follow-up"); err != nil {
+		t.Fatalf("wait local task: %v", err)
+	}
+
+	return cliTimelineFixture{
+		cfg:        cfg,
+		configPath: configPath,
+		run:        run,
+		sourceTask: sourceTask,
+		localTask:  localTask,
 	}
 }
 

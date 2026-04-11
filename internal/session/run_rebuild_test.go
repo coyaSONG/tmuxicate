@@ -353,6 +353,75 @@ func TestFormatRunGraphIncludesSummaryBeforeTaskDetails(t *testing.T) {
 	}
 }
 
+func TestFormatRunGraphIncludesTimelineBetweenSummaryAndTaskDetails(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedRunTimelineFixture(t)
+
+	output, err := FormatRunGraphView(fixture.cfg.Session.StateDir, fixture.graph, RunGraphFormatOptions{
+		Timeline: true,
+	})
+	if err != nil {
+		t.Fatalf("FormatRunGraphView() unexpected error: %v", err)
+	}
+
+	summaryIndex := strings.Index(output, "Summary:\n")
+	if summaryIndex == -1 {
+		t.Fatalf("expected summary block in timeline-aware output\noutput:\n%s", output)
+	}
+
+	timelineIndex := strings.Index(output, "\nTimeline:\n")
+	if timelineIndex == -1 {
+		t.Fatalf("expected timeline block in timeline-aware output\noutput:\n%s", output)
+	}
+
+	firstTaskIndex := strings.Index(output, "\nTask: ")
+	if firstTaskIndex == -1 {
+		t.Fatalf("expected task detail blocks in timeline-aware output\noutput:\n%s", output)
+	}
+
+	if !(summaryIndex < timelineIndex && timelineIndex < firstTaskIndex) {
+		t.Fatalf("expected summary -> timeline -> task ordering\noutput:\n%s", output)
+	}
+}
+
+func TestFormatRunGraphFiltersTimelineByOwnerStateClassAndExecutionTarget(t *testing.T) {
+	t.Parallel()
+
+	fixture := seedRunTimelineFixture(t)
+
+	output, err := FormatRunGraphView(fixture.cfg.Session.StateDir, fixture.graph, RunGraphFormatOptions{
+		Timeline: true,
+		TimelineFilter: RunTimelineFilter{
+			Owner:           "backend-high",
+			State:           "idle",
+			TaskClass:       protocol.TaskClassImplementation,
+			ExecutionTarget: "sandbox",
+		},
+	})
+	if err != nil {
+		t.Fatalf("FormatRunGraphView() unexpected error: %v", err)
+	}
+
+	requiredSnippets := []string{
+		"Timeline:\n",
+		"Timeline Filters: owner=backend-high state=idle class=implementation target=sandbox",
+		"owner=backend-high",
+		"state=idle",
+		"class=implementation",
+		"target=sandbox",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected timeline-aware output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+
+	if strings.Contains(output, "target=local") {
+		t.Fatalf("expected sandbox filter to exclude local-target timeline rows\noutput:\n%s", output)
+	}
+}
+
 func TestRunShowIncludesTaskLocalBlockerBlock(t *testing.T) {
 	t.Parallel()
 
