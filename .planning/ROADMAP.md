@@ -12,7 +12,7 @@ This milestone builds on the shipped coordinator workflow foundation by making c
 ## Phases
 
 - [x] **Phase 6: Adaptive Routing Signals** - Persist adaptive routing inputs and explain why routed work went to a specific owner
-- [ ] **Phase 7: Partial Replanning Flow** - Add bounded task replacement and lineage-preserving partial replans for blocked work
+- [x] **Phase 7: Partial Replanning Flow** - Add bounded task replacement and lineage-preserving partial replans for blocked work
 - [ ] **Phase 8: Remote Execution Targets** - Extend dispatch and operator controls to remote or sandboxed worker targets
 - [ ] **Phase 9: Run Timeline Views** - Add per-run timelines and filtering for operator inspection
 
@@ -43,8 +43,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Define partial replan artifacts, replacement semantics, and bounded recovery rules
-- [ ] 07-02-PLAN.md — Implement partial replan execution and render lineage in existing run inspection surfaces
+- [x] 07-01-PLAN.md — Define partial replan artifacts, replacement semantics, and bounded recovery rules
+- [x] 07-02-PLAN.md — Implement partial replan execution and render lineage in existing run inspection surfaces
 
 ### Phase 8: Remote Execution Targets
 **Goal**: Coordinator can dispatch work to remote or sandboxed execution targets without breaking current mailbox and adapter expectations.
@@ -82,6 +82,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. Adaptive Routing Signals | v1.1 | 2/2 | Complete | 2026-04-11 |
-| 7. Partial Replanning Flow | v1.1 | 0/2 | Not started | - |
+| 7. Partial Replanning Flow | v1.1 | 2/2 | Complete | 2026-04-11 |
 | 8. Remote Execution Targets | v1.1 | 0/2 | Not started | - |
 | 9. Run Timeline Views | v1.1 | 0/2 | Not started | - |

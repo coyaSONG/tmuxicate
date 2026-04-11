@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Adaptive Coordination
-current_phase: 07
-current_phase_name: partial-replanning-flow
+current_phase: 08
+current_phase_name: remote-execution-targets
 current_plan: Not started
 status: ready
-stopped_at: Ready for Phase 07 planning
-last_updated: "2026-04-11T10:26:05.435Z"
+stopped_at: Completed Phase 07 partial-replanning-flow
+last_updated: "2026-04-11T10:46:53.686Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 2
-  percent: 25
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -24,28 +24,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Phase 06 is complete; Phase 07 Partial Replanning Flow is next
+**Current focus:** Phase 07 is complete; Phase 08 Remote Execution Targets is next
 
 ## Current Position
 
-Phase: 07 (partial-replanning-flow) — NOT STARTED
-Current Phase: 07
-Current Phase Name: partial-replanning-flow
+Phase: 08 (remote-execution-targets) — NOT STARTED
+Current Phase: 08
+Current Phase Name: remote-execution-targets
 Plan: —
 Current Plan: Not started
 Total Plans in Phase: 2
 Total Phases: 4
-Status: Ready to discuss Phase 07 for milestone v1.1 Adaptive Coordination
+Status: Ready to discuss Phase 08 for milestone v1.1 Adaptive Coordination
 Last activity: 2026-04-11
-Last Activity Description: Phase 06 Adaptive Routing Signals completed with adaptive preference artifacts and route-time evidence
+Last Activity Description: Phase 07 Partial Replanning Flow completed with bounded partial replan artifacts, execution, and run-show lineage
 
-Progress: [███-------] 25%
+Progress: [█████-----] 50%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 14
+- Total plans completed: 16
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -71,6 +71,8 @@ Progress: [███-------] 25%
 | Phase 03 P02 | 1h | 3 tasks | 6 files |
 | Phase 06 P01 | 4min | 2 tasks | 11 files |
 | Phase 06 P02 | 4min | 2 tasks | 7 files |
+| Phase 07 P01 | 2min | 2 tasks | 6 files |
+| Phase 07 P02 | 4min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -100,6 +102,9 @@ Recent decisions affecting current work:
 - [Phase 06]: Adaptive preference rebuilds reuse RunGraph plus RunSummary instead of transcript scanning or a second reporting backend.
 - [Phase 06]: Adaptive routing only changes selection when a unique exact-match preference beats the deterministic baseline; ties fall back to route_priority desc, config_order asc.
 - [Phase 06]: Adaptive explanations are additive RoutingDecision fields rendered from task YAML in both route-task output and run show.
+- [Phase 07]: Partial replans are durable source-task keyed artifacts with one superseded task and one replacement task.
+- [Phase 07]: partial_replan only runs from escalated blocker cases and still creates replacement work through RouteChildTask guardrails.
+- [Phase 07]: run show and run summaries rebuild partial replan lineage from disk and fail loudly on blocker/replan link drift.
 
 ### Pending Todos
 
@@ -111,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T10:26:05.433Z
-Stopped at: Ready for Phase 07 planning
+Last session: 2026-04-11T10:46:53.684Z
+Stopped at: Completed Phase 07 partial-replanning-flow
 Resume file: None

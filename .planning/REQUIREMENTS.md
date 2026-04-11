@@ -12,8 +12,8 @@
 
 ### Partial Replanning
 
-- [ ] **REPLAN-01**: Coordinator can create a bounded partial replan for blocked work instead of only rerouting or escalating the current task
-- [ ] **REPLAN-02**: Partial replans preserve lineage to the original task, blocker case, and any follow-up decisions or replacements
+- [x] **REPLAN-01**: Coordinator can create a bounded partial replan for blocked work instead of only rerouting or escalating the current task
+- [x] **REPLAN-02**: Partial replans preserve lineage to the original task, blocker case, and any follow-up decisions or replacements
 
 ### Execution Targets
 
@@ -52,8 +52,8 @@
 |-------------|-------|--------|
 | ADAPT-01 | Phase 6 | Complete |
 | ADAPT-02 | Phase 6 | Complete |
-| REPLAN-01 | Phase 7 | Pending |
-| REPLAN-02 | Phase 7 | Pending |
+| REPLAN-01 | Phase 7 | Complete |
+| REPLAN-02 | Phase 7 | Complete |
 | EXEC-01 | Phase 8 | Pending |
 | EXEC-02 | Phase 8 | Pending |
 | OBS-01 | Phase 9 | Pending |
