@@ -76,6 +76,26 @@ type RoutingConfig struct {
 	Coordinator          string               `yaml:"coordinator"`
 	ExclusiveTaskClasses []protocol.TaskClass `yaml:"exclusive_task_classes"`
 	FanoutTaskClasses    []protocol.TaskClass `yaml:"fanout_task_classes"`
+	Adaptive             AdaptiveRoutingConfig `yaml:"adaptive"`
+}
+
+type AdaptiveRoutingConfig struct {
+	Enabled                 bool                       `yaml:"enabled"`
+	LookbackRuns            int                        `yaml:"lookback_runs"`
+	SuccessWeight           int                        `yaml:"success_weight"`
+	ApprovalWeight          int                        `yaml:"approval_weight"`
+	ChangesRequestedPenalty int                        `yaml:"changes_requested_penalty"`
+	BlockedPenalty          int                        `yaml:"blocked_penalty"`
+	WaitPenalty             int                        `yaml:"wait_penalty"`
+	ManualPreferences       []AdaptiveManualPreference `yaml:"manual_preferences"`
+}
+
+type AdaptiveManualPreference struct {
+	TaskClass      protocol.TaskClass `yaml:"task_class"`
+	Domains        []string           `yaml:"domains"`
+	PreferredOwner protocol.AgentName `yaml:"preferred_owner"`
+	Weight         int                `yaml:"weight"`
+	Reason         string             `yaml:"reason"`
 }
 
 type BlockersConfig struct {

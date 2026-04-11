@@ -18,6 +18,8 @@ const (
 	tasksDirName       = "tasks"
 	reviewsDirName     = "reviews"
 	blockersDirName    = "blockers"
+	preferencesDirName = "preferences"
+	adaptiveDirName    = "adaptive-routing"
 )
 
 func SessionDir(stateDir string) string {
@@ -142,4 +144,12 @@ func RunLocksDir(stateDir string, runID protocol.RunID) string {
 
 func RunRouteLockPath(stateDir string, runID protocol.RunID) string {
 	return filepath.Join(RunLocksDir(stateDir, runID), "route.lock")
+}
+
+func AdaptiveRoutingPreferencesDir(stateDir string) string {
+	return filepath.Join(CoordinatorDir(stateDir), preferencesDirName, adaptiveDirName)
+}
+
+func AdaptiveRoutingPreferencesPath(stateDir string, coordinator protocol.AgentName) string {
+	return filepath.Join(AdaptiveRoutingPreferencesDir(stateDir), fmt.Sprintf("%s.yaml", coordinator))
 }

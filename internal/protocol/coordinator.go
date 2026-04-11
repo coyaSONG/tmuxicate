@@ -199,6 +199,44 @@ type RoutingDecision struct {
 	DuplicateStatus string      `yaml:"duplicate_status,omitempty"`
 	MatchedTaskID   TaskID      `yaml:"matched_task_id,omitempty"`
 	Suggestions     []string    `yaml:"suggestions,omitempty"`
+	Adaptive        *AdaptiveRoutingExplanation `yaml:"adaptive,omitempty"`
+}
+
+type AdaptiveRoutingExplanation struct {
+	Applied         bool                        `yaml:"applied"`
+	BaselineOwner   AgentName                   `yaml:"baseline_owner,omitempty"`
+	PreferredOwner  AgentName                   `yaml:"preferred_owner,omitempty"`
+	HistoricalScore int                         `yaml:"historical_score"`
+	ManualWeight    int                         `yaml:"manual_weight"`
+	TotalScore      int                         `yaml:"total_score"`
+	Reason          string                      `yaml:"reason,omitempty"`
+	Evidence        []AdaptiveRoutingEvidenceRef `yaml:"evidence,omitempty"`
+}
+
+type AdaptiveRoutingPreferenceSet struct {
+	Coordinator  AgentName                  `yaml:"coordinator"`
+	UpdatedAt    time.Time                  `yaml:"updated_at"`
+	LookbackRuns int                        `yaml:"lookback_runs"`
+	Preferences  []AdaptiveRoutingPreference `yaml:"preferences"`
+}
+
+type AdaptiveRoutingPreference struct {
+	PreferenceKey     string                      `yaml:"preference_key"`
+	TaskClass         TaskClass                   `yaml:"task_class"`
+	NormalizedDomains []string                    `yaml:"normalized_domains"`
+	PreferredOwner    AgentName                   `yaml:"preferred_owner"`
+	HistoricalScore   int                         `yaml:"historical_score"`
+	ManualWeight      int                         `yaml:"manual_weight"`
+	TotalScore        int                         `yaml:"total_score"`
+	Evidence          []AdaptiveRoutingEvidenceRef `yaml:"evidence,omitempty"`
+}
+
+type AdaptiveRoutingEvidenceRef struct {
+	RunID        RunID     `yaml:"run_id"`
+	SourceTaskID TaskID    `yaml:"source_task_id"`
+	MessageID    MessageID `yaml:"message_id"`
+	Status       string    `yaml:"status"`
+	Note         string    `yaml:"note"`
 }
 
 type RouteRejection struct {

@@ -53,6 +53,43 @@ func (s *CoordinatorStore) CreateRun(run *protocol.CoordinatorRun) error {
 	return nil
 }
 
+func (s *CoordinatorStore) ReadAdaptiveRoutingPreferences(coordinator protocol.AgentName) (*protocol.AdaptiveRoutingPreferenceSet, error) {
+	data, err := os.ReadFile(AdaptiveRoutingPreferencesPath(s.stateDir, coordinator))
+	if err != nil {
+		return nil, fmt.Errorf("read adaptive routing preferences: %w", err)
+	}
+
+	var preferences protocol.AdaptiveRoutingPreferenceSet
+	if err := yaml.Unmarshal(data, &preferences); err != nil {
+		return nil, fmt.Errorf("unmarshal adaptive routing preferences: %w", err)
+	}
+	if err := preferences.Validate(); err != nil {
+		return nil, fmt.Errorf("validate adaptive routing preferences: %w", err)
+	}
+
+	return &preferences, nil
+}
+
+func (s *CoordinatorStore) WriteAdaptiveRoutingPreferences(preferences *protocol.AdaptiveRoutingPreferenceSet) error {
+	if preferences == nil {
+		return errors.New("adaptive routing preferences are required")
+	}
+	if err := preferences.Validate(); err != nil {
+		return fmt.Errorf("validate adaptive routing preferences: %w", err)
+	}
+
+	path := AdaptiveRoutingPreferencesPath(s.stateDir, preferences.Coordinator)
+	data, err := yaml.Marshal(preferences)
+	if err != nil {
+		return fmt.Errorf("marshal adaptive routing preferences: %w", err)
+	}
+	if err := writeFileAtomically(path, data, 0o644); err != nil {
+		return fmt.Errorf("write adaptive routing preferences: %w", err)
+	}
+
+	return nil
+}
+
 func (s *CoordinatorStore) ReadRun(runID protocol.RunID) (*protocol.CoordinatorRun, error) {
 	data, err := os.ReadFile(RunFilePath(s.stateDir, runID))
 	if err != nil {

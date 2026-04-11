@@ -669,6 +669,134 @@ func (d *RoutingDecision) Validate() error {
 			return fmt.Errorf("suggestions[%d] must not be blank", i)
 		}
 	}
+	if d.Adaptive != nil {
+		if err := d.Adaptive.Validate(); err != nil {
+			return fmt.Errorf("adaptive: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *AdaptiveRoutingExplanation) Validate() error {
+	if a == nil {
+		return errors.New("adaptive routing explanation is required")
+	}
+	if a.ManualWeight < 0 {
+		return errors.New("manual_weight must be >= 0")
+	}
+	if a.TotalScore != a.HistoricalScore+a.ManualWeight {
+		return errors.New("total_score must equal historical_score + manual_weight")
+	}
+	if a.Applied {
+		if strings.TrimSpace(string(a.BaselineOwner)) == "" {
+			return errors.New("baseline_owner is required when applied is true")
+		}
+		if strings.TrimSpace(a.Reason) == "" {
+			return errors.New("reason is required when applied is true")
+		}
+	}
+	if len(a.Evidence) > 0 {
+		if !slices.IsSortedFunc(a.Evidence, compareAdaptiveRoutingEvidenceRef) {
+			return errors.New("evidence must be sorted by run_id, source_task_id, message_id, status")
+		}
+	}
+	for i := range a.Evidence {
+		if err := a.Evidence[i].Validate(); err != nil {
+			return fmt.Errorf("evidence[%d]: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *AdaptiveRoutingPreferenceSet) Validate() error {
+	if p == nil {
+		return errors.New("adaptive routing preference set is required")
+	}
+	if strings.TrimSpace(string(p.Coordinator)) == "" {
+		return errors.New("coordinator is required")
+	}
+	if p.UpdatedAt.IsZero() {
+		return errors.New("updated_at is required")
+	}
+	if p.LookbackRuns < 0 {
+		return errors.New("lookback_runs must be >= 0")
+	}
+	for i := range p.Preferences {
+		if err := p.Preferences[i].Validate(); err != nil {
+			return fmt.Errorf("preferences[%d]: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *AdaptiveRoutingPreference) Validate() error {
+	if p == nil {
+		return errors.New("adaptive routing preference is required")
+	}
+	if err := p.TaskClass.Validate(); err != nil {
+		return fmt.Errorf("task_class: %w", err)
+	}
+	domains, err := NormalizeRouteDomains(p.NormalizedDomains)
+	if err != nil {
+		return fmt.Errorf("normalized_domains: %w", err)
+	}
+	if len(domains) == 0 {
+		return errors.New("normalized_domains must contain at least one domain")
+	}
+	if !slices.Equal(domains, p.NormalizedDomains) {
+		return errors.New("normalized_domains must be sorted and normalized")
+	}
+	if strings.TrimSpace(string(p.PreferredOwner)) == "" {
+		return errors.New("preferred_owner is required")
+	}
+	if p.ManualWeight < 0 {
+		return errors.New("manual_weight must be >= 0")
+	}
+	if p.TotalScore != p.HistoricalScore+p.ManualWeight {
+		return errors.New("total_score must equal historical_score + manual_weight")
+	}
+	expectedKey := fmt.Sprintf("%s|%s|%s", p.TaskClass, strings.Join(domains, ","), p.PreferredOwner)
+	if p.PreferenceKey != expectedKey {
+		return fmt.Errorf("preference_key must equal %q", expectedKey)
+	}
+	if p.HistoricalScore != 0 && len(p.Evidence) == 0 {
+		return errors.New("evidence is required when historical_score is non-zero")
+	}
+	if len(p.Evidence) > 0 && !slices.IsSortedFunc(p.Evidence, compareAdaptiveRoutingEvidenceRef) {
+		return errors.New("evidence must be sorted by run_id, source_task_id, message_id, status")
+	}
+	for i := range p.Evidence {
+		if err := p.Evidence[i].Validate(); err != nil {
+			return fmt.Errorf("evidence[%d]: %w", i, err)
+		}
+	}
+	p.NormalizedDomains = domains
+
+	return nil
+}
+
+func (e *AdaptiveRoutingEvidenceRef) Validate() error {
+	if e == nil {
+		return errors.New("adaptive routing evidence ref is required")
+	}
+	if !isGeneratedRunID(e.RunID) {
+		return errors.New("run_id must use generated run_ identifier")
+	}
+	if !isGeneratedTaskID(e.SourceTaskID) {
+		return errors.New("source_task_id must use generated task_ identifier")
+	}
+	if strings.TrimSpace(string(e.MessageID)) == "" {
+		return errors.New("message_id is required")
+	}
+	if strings.TrimSpace(e.Status) == "" {
+		return errors.New("status is required")
+	}
+	if strings.TrimSpace(e.Note) == "" {
+		return errors.New("note is required")
+	}
 
 	return nil
 }
@@ -738,6 +866,42 @@ func NormalizeRouteDomains(domains []string) ([]string, error) {
 
 	slices.Sort(normalized)
 	return normalized, nil
+}
+
+func compareAdaptiveRoutingEvidenceRef(left, right AdaptiveRoutingEvidenceRef) int {
+	if diff := strings.Compare(string(left.RunID), string(right.RunID)); diff != 0 {
+		return diff
+	}
+	if diff := strings.Compare(string(left.SourceTaskID), string(right.SourceTaskID)); diff != 0 {
+		return diff
+	}
+	if diff := strings.Compare(string(left.MessageID), string(right.MessageID)); diff != 0 {
+		return diff
+	}
+	if diff := adaptiveRoutingEvidenceStatusRank(left.Status) - adaptiveRoutingEvidenceStatusRank(right.Status); diff != 0 {
+		return diff
+	}
+
+	return strings.Compare(left.Note, right.Note)
+}
+
+func adaptiveRoutingEvidenceStatusRank(status string) int {
+	switch status {
+	case "completed":
+		return 1
+	case "approved":
+		return 2
+	case "changes_requested":
+		return 3
+	case "blocked":
+		return 4
+	case "waiting":
+		return 5
+	case "escalated":
+		return 6
+	default:
+		return 99
+	}
 }
 
 func isValidPriority(p Priority) bool {

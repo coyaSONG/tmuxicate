@@ -824,6 +824,18 @@ func newTaskDoneCmd() *cobra.Command {
 					return err
 				}
 				summaryOutput = session.FormatRunSummary(session.BuildRunSummary(graph))
+
+				cfg, err := config.LoadResolved(filepathJoin(resolvedStateDir, "config.resolved.yaml"))
+				if err != nil {
+					return err
+				}
+				preferences, err := session.BuildAdaptiveRoutingPreferences(cfg, resolvedStateDir, graph.Run.Coordinator)
+				if err != nil {
+					return err
+				}
+				if err := mailbox.NewCoordinatorStore(resolvedStateDir).WriteAdaptiveRoutingPreferences(preferences); err != nil {
+					return err
+				}
 			}
 
 			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "done"); err != nil {

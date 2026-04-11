@@ -169,6 +169,24 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid routing.fanout_task_classes value %q: %w", taskClass, err)
 		}
 	}
+	if c.Routing.Adaptive.LookbackRuns < 0 {
+		return errors.New("routing.adaptive.lookback_runs must be >= 0")
+	}
+	if c.Routing.Adaptive.SuccessWeight < 0 {
+		return errors.New("routing.adaptive.success_weight must be >= 0")
+	}
+	if c.Routing.Adaptive.ApprovalWeight < 0 {
+		return errors.New("routing.adaptive.approval_weight must be >= 0")
+	}
+	if c.Routing.Adaptive.ChangesRequestedPenalty < 0 {
+		return errors.New("routing.adaptive.changes_requested_penalty must be >= 0")
+	}
+	if c.Routing.Adaptive.BlockedPenalty < 0 {
+		return errors.New("routing.adaptive.blocked_penalty must be >= 0")
+	}
+	if c.Routing.Adaptive.WaitPenalty < 0 {
+		return errors.New("routing.adaptive.wait_penalty must be >= 0")
+	}
 	if c.Blockers.MaxReroutesDefault < 0 {
 		return errors.New("blockers.max_reroutes_default must be >= 0")
 	}
@@ -246,6 +264,35 @@ func (c *Config) Validate() error {
 
 	if _, ok := knownAgents[c.Routing.Coordinator]; !ok {
 		return fmt.Errorf("routing.coordinator %q does not match any agent name", c.Routing.Coordinator)
+	}
+	for i := range c.Routing.Adaptive.ManualPreferences {
+		preference := &c.Routing.Adaptive.ManualPreferences[i]
+		prefix := fmt.Sprintf("routing.adaptive.manual_preferences[%d]", i)
+
+		if err := preference.TaskClass.Validate(); err != nil {
+			return fmt.Errorf("%s.task_class %q is invalid: %w", prefix, preference.TaskClass, err)
+		}
+		domains, err := protocol.NormalizeRouteDomains(preference.Domains)
+		if err != nil {
+			return fmt.Errorf("%s.domains: %w", prefix, err)
+		}
+		if len(domains) == 0 {
+			return fmt.Errorf("%s.domains must contain at least one domain", prefix)
+		}
+		if strings.TrimSpace(string(preference.PreferredOwner)) == "" {
+			return fmt.Errorf("%s.preferred_owner is required", prefix)
+		}
+		if _, ok := knownAgents[string(preference.PreferredOwner)]; !ok {
+			return fmt.Errorf("%s.preferred_owner %q does not match any agent name", prefix, preference.PreferredOwner)
+		}
+		if preference.Weight < 0 {
+			return fmt.Errorf("%s.weight must be >= 0", prefix)
+		}
+		if strings.TrimSpace(preference.Reason) == "" {
+			return fmt.Errorf("%s.reason is required", prefix)
+		}
+
+		preference.Domains = domains
 	}
 
 	for i := range c.Agents {
@@ -339,6 +386,15 @@ func (c *Config) clone() Config {
 	}
 	if c.Routing.FanoutTaskClasses != nil {
 		clone.Routing.FanoutTaskClasses = append([]protocol.TaskClass(nil), c.Routing.FanoutTaskClasses...)
+	}
+	if c.Routing.Adaptive.ManualPreferences != nil {
+		clone.Routing.Adaptive.ManualPreferences = make([]AdaptiveManualPreference, len(c.Routing.Adaptive.ManualPreferences))
+		copy(clone.Routing.Adaptive.ManualPreferences, c.Routing.Adaptive.ManualPreferences)
+		for i := range c.Routing.Adaptive.ManualPreferences {
+			if c.Routing.Adaptive.ManualPreferences[i].Domains != nil {
+				clone.Routing.Adaptive.ManualPreferences[i].Domains = append([]string(nil), c.Routing.Adaptive.ManualPreferences[i].Domains...)
+			}
+		}
 	}
 	if c.Blockers.MaxReroutesByTaskClass != nil {
 		clone.Blockers.MaxReroutesByTaskClass = make(map[protocol.TaskClass]int, len(c.Blockers.MaxReroutesByTaskClass))
