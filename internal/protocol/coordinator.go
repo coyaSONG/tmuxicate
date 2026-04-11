@@ -239,7 +239,15 @@ type RoutingDecision struct {
 	DuplicateStatus string                      `yaml:"duplicate_status,omitempty"`
 	MatchedTaskID   TaskID                      `yaml:"matched_task_id,omitempty"`
 	Suggestions     []string                    `yaml:"suggestions,omitempty"`
+	ExcludedTargets []RouteTargetExclusion      `yaml:"excluded_targets,omitempty"`
 	Adaptive        *AdaptiveRoutingExplanation `yaml:"adaptive,omitempty"`
+}
+
+type RouteTargetExclusion struct {
+	Owner      AgentName `yaml:"owner"`
+	TargetName string    `yaml:"target_name"`
+	Status     string    `yaml:"status"`
+	Reason     string    `yaml:"reason"`
 }
 
 type AdaptiveRoutingExplanation struct {
@@ -280,11 +288,12 @@ type AdaptiveRoutingEvidenceRef struct {
 }
 
 type RouteRejection struct {
-	TaskClass          TaskClass   `yaml:"task_class"`
-	Domains            []string    `yaml:"domains"`
-	AllowedOwners      []AgentName `yaml:"allowed_owners"`
-	EligibleCandidates []AgentName `yaml:"eligible_candidates"`
-	Suggestions        []string    `yaml:"suggestions"`
+	TaskClass          TaskClass              `yaml:"task_class"`
+	Domains            []string               `yaml:"domains"`
+	AllowedOwners      []AgentName            `yaml:"allowed_owners"`
+	EligibleCandidates []AgentName            `yaml:"eligible_candidates"`
+	Suggestions        []string               `yaml:"suggestions"`
+	ExcludedTargets    []RouteTargetExclusion `yaml:"excluded_targets,omitempty"`
 }
 
 func (r *RouteRejection) Error() string {

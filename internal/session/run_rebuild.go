@@ -357,6 +357,9 @@ func FormatRunGraphView(stateDir string, graph *RunGraph, opts RunGraphFormatOpt
 			if candidates := formatRoutingCandidates(task.Task.RoutingDecision.Candidates); candidates != "" {
 				fmt.Fprintf(&builder, "Candidates: %s\n", candidates)
 			}
+			if excluded := formatRoutingExcludedTargets(task.Task.RoutingDecision.ExcludedTargets); excluded != "" {
+				fmt.Fprintf(&builder, "Excluded Targets: %s\n", excluded)
+			}
 			if adaptive := task.Task.RoutingDecision.Adaptive; adaptive != nil && adaptive.Applied {
 				fmt.Fprintf(&builder, "Adaptive Routing: %s\n", adaptive.Reason)
 				fmt.Fprintf(&builder, "Adaptive Baseline: %s\n", normalizeDisplayValue(string(adaptive.BaselineOwner)))
@@ -743,6 +746,17 @@ func formatRoutingCandidates(candidates []protocol.AgentName) string {
 		parts = append(parts, string(candidate))
 	}
 
+	return strings.Join(parts, ", ")
+}
+
+func formatRoutingExcludedTargets(exclusions []protocol.RouteTargetExclusion) string {
+	if len(exclusions) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(exclusions))
+	for _, exclusion := range exclusions {
+		parts = append(parts, fmt.Sprintf("%s/%s (%s)", exclusion.Owner, exclusion.TargetName, exclusion.Status))
+	}
 	return strings.Join(parts, ", ")
 }
 

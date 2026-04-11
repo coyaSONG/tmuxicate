@@ -13,6 +13,7 @@ const (
 	stagingDirName     = ".staging"
 	orphanedDirName    = "orphaned"
 	coordinatorDirName = "coordinator"
+	targetsDirName     = "targets"
 	runsDirName        = "runs"
 	runFileName        = "run.yaml"
 	tasksDirName       = "tasks"
@@ -161,4 +162,36 @@ func AdaptiveRoutingPreferencesDir(stateDir string) string {
 
 func AdaptiveRoutingPreferencesPath(stateDir string, coordinator protocol.AgentName) string {
 	return filepath.Join(AdaptiveRoutingPreferencesDir(stateDir), fmt.Sprintf("%s.yaml", coordinator))
+}
+
+func TargetsDir(stateDir string) string {
+	return filepath.Join(SessionDir(stateDir), targetsDirName)
+}
+
+func TargetDir(stateDir, target string) string {
+	return filepath.Join(TargetsDir(stateDir), target)
+}
+
+func TargetEventsDir(stateDir, target string) string {
+	return filepath.Join(TargetDir(stateDir, target), "events")
+}
+
+func TargetStatePath(stateDir, target string) string {
+	return filepath.Join(TargetDir(stateDir, target), "health.current.json")
+}
+
+func TargetHealthLogPath(stateDir, target string) string {
+	return filepath.Join(TargetEventsDir(stateDir, target), "health.jsonl")
+}
+
+func TargetDispatchesDir(stateDir, target string) string {
+	return filepath.Join(TargetDir(stateDir, target), "dispatches")
+}
+
+func TargetDispatchPath(stateDir, target string, msgID protocol.MessageID) string {
+	return filepath.Join(TargetDispatchesDir(stateDir, target), fmt.Sprintf("%s.json", msgID))
+}
+
+func TargetDispatchLogPath(stateDir, target string) string {
+	return filepath.Join(TargetEventsDir(stateDir, target), "dispatch.jsonl")
 }

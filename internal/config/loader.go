@@ -91,6 +91,12 @@ func (c *Config) Resolve(workspace string) (*ResolvedConfig, error) {
 		cfg.Defaults.Workdir = resolvePath(absBaseDir, cfg.Defaults.Workdir)
 	}
 
+	for i := range cfg.ExecutionTargets {
+		if cfg.ExecutionTargets[i].Dispatch.Workdir != "" {
+			cfg.ExecutionTargets[i].Dispatch.Workdir = resolvePath(absBaseDir, cfg.ExecutionTargets[i].Dispatch.Workdir)
+		}
+	}
+
 	for i := range cfg.Agents {
 		if cfg.Agents[i].Workdir == "" {
 			cfg.Agents[i].Workdir = cfg.Defaults.Workdir
@@ -227,6 +233,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid %s.kind %q", prefix, target.Kind)
 		}
 		target.Description = strings.TrimSpace(target.Description)
+		target.Dispatch.Command = strings.TrimSpace(target.Dispatch.Command)
 
 		capabilities, err := normalizeExecutionTargetCapabilities(target.Capabilities)
 		if err != nil {
@@ -440,6 +447,12 @@ func (c *Config) clone() Config {
 		for i := range c.ExecutionTargets {
 			if c.ExecutionTargets[i].Capabilities != nil {
 				clone.ExecutionTargets[i].Capabilities = append([]string(nil), c.ExecutionTargets[i].Capabilities...)
+			}
+			if c.ExecutionTargets[i].Dispatch.Env != nil {
+				clone.ExecutionTargets[i].Dispatch.Env = make(map[string]string, len(c.ExecutionTargets[i].Dispatch.Env))
+				for key, value := range c.ExecutionTargets[i].Dispatch.Env {
+					clone.ExecutionTargets[i].Dispatch.Env[key] = value
+				}
 			}
 		}
 	}

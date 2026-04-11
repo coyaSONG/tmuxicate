@@ -15,13 +15,14 @@ import (
 )
 
 type StatusReport struct {
-	SessionName   string
-	State         string
-	Uptime        time.Duration
-	DaemonHealthy bool
-	AgentStatuses []AgentStatus
-	FlowStats     FlowStats
-	ThreadStats   ThreadStats
+	SessionName    string
+	State          string
+	Uptime         time.Duration
+	DaemonHealthy  bool
+	AgentStatuses  []AgentStatus
+	TargetStatuses []TargetStatus
+	FlowStats      FlowStats
+	ThreadStats    ThreadStats
 }
 
 type AgentStatus struct {
@@ -216,6 +217,12 @@ func Status(stateDir string, tmuxClient tmux.Client) (*StatusReport, error) {
 	sort.Slice(report.AgentStatuses, func(i, j int) bool {
 		return report.AgentStatuses[i].Name < report.AgentStatuses[j].Name
 	})
+
+	targetStatuses, err := ListTargetStatuses(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	report.TargetStatuses = targetStatuses
 
 	for _, agg := range threads {
 		if agg == nil || !agg.HasAny {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/coyaSONG/tmuxicate/internal/config"
 	"github.com/coyaSONG/tmuxicate/internal/mailbox"
+	"github.com/coyaSONG/tmuxicate/internal/protocol"
 	"github.com/coyaSONG/tmuxicate/internal/tmux"
 	"gopkg.in/yaml.v3"
 )
@@ -105,9 +106,34 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 		)
 	}
 
+	targets, err := configuredExecutionTargets(cfg)
+	if err != nil {
+		return err
+	}
+	for _, target := range targets {
+		dirs = append(dirs,
+			mailbox.TargetDir(cfg.Session.StateDir, target.Name),
+			mailbox.TargetEventsDir(cfg.Session.StateDir, target.Name),
+			mailbox.TargetDispatchesDir(cfg.Session.StateDir, target.Name),
+		)
+	}
+
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create state dir %s: %w", dir, err)
+		}
+	}
+
+	for _, targetCfg := range targets {
+		target := protocol.ExecutionTarget{
+			Name:         targetCfg.Name,
+			Kind:         targetCfg.Kind,
+			Description:  targetCfg.Description,
+			Capabilities: append([]string(nil), targetCfg.Capabilities...),
+			PaneBacked:   targetCfg.PaneBacked,
+		}
+		if _, err := mailbox.UpsertTargetState(cfg.Session.StateDir, target, nil); err != nil {
+			return fmt.Errorf("initialize target state for %s: %w", target.Name, err)
 		}
 	}
 

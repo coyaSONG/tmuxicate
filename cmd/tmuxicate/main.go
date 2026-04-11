@@ -42,6 +42,7 @@ func newRootCmd() *cobra.Command {
 		newReplyCmd(),
 		newNextCmd(),
 		newTaskCmd(),
+		newTargetCmd(),
 		newStatusCmd(),
 		newLogCmd(),
 		newInitCmd(),
@@ -356,6 +357,11 @@ func printRouteTaskSelection(out io.Writer, taskID string, owner protocol.AgentN
 			return err
 		}
 	}
+	if decision != nil && len(decision.ExcludedTargets) > 0 {
+		if _, err := fmt.Fprintf(out, "Excluded Targets: %s\n", formatExcludedTargets(decision.ExcludedTargets)); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -366,6 +372,17 @@ func formatExecutionTargetCapabilities(capabilities []string) string {
 	}
 
 	return strings.Join(capabilities, ", ")
+}
+
+func formatExcludedTargets(exclusions []protocol.RouteTargetExclusion) string {
+	if len(exclusions) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(exclusions))
+	for _, exclusion := range exclusions {
+		parts = append(parts, fmt.Sprintf("%s/%s (%s)", exclusion.Owner, exclusion.TargetName, exclusion.Status))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func formatAdaptiveEvidence(evidence []protocol.AdaptiveRoutingEvidenceRef) string {
@@ -1057,6 +1074,144 @@ func newStatusCmd() *cobra.Command {
 	return cmd
 }
 
+func newTargetCmd() *cobra.Command {
+	var configPath string
+	var stateDir string
+
+	cmd := &cobra.Command{
+		Use:   "target",
+		Short: "Inspect and control execution targets",
+	}
+
+	resolveStateDir := func() (string, error) {
+		if strings.TrimSpace(stateDir) != "" {
+			return stateDir, nil
+		}
+		cfg, err := config.LoadResolved(configPath)
+		if err != nil {
+			return "", err
+		}
+		return cfg.Session.StateDir, nil
+	}
+
+	cmd.PersistentFlags().StringVar(&configPath, "config", "tmuxicate.yaml", "path to tmuxicate config")
+	cmd.PersistentFlags().StringVar(&stateDir, "state-dir", "", "override session state directory")
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List execution target health and dispatch status",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			resolvedStateDir, err := resolveStateDir()
+			if err != nil {
+				return err
+			}
+			statuses, err := session.ListTargetStatuses(resolvedStateDir)
+			if err != nil {
+				return err
+			}
+			printTargetStatuses(statuses)
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "status <target>",
+		Short: "Show detailed status for one execution target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir()
+			if err != nil {
+				return err
+			}
+			statuses, err := session.ListTargetStatuses(resolvedStateDir)
+			if err != nil {
+				return err
+			}
+			for _, status := range statuses {
+				if status.Name == args[0] {
+					printTargetStatus(status)
+					return nil
+				}
+			}
+			return fmt.Errorf("unknown target %q", args[0])
+		},
+	})
+
+	var heartbeatStatus string
+	var heartbeatSummary string
+	var heartbeatCapabilities []string
+	heartbeatCmd := &cobra.Command{
+		Use:   "heartbeat <target>",
+		Short: "Record target health from a remote launcher or worker",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir()
+			if err != nil {
+				return err
+			}
+			status, err := parseTargetAvailability(heartbeatStatus)
+			if err != nil {
+				return err
+			}
+			report, err := session.TargetHeartbeat(resolvedStateDir, args[0], status, heartbeatSummary, heartbeatCapabilities)
+			if err != nil {
+				return err
+			}
+			printTargetStatus(*report)
+			return nil
+		},
+	}
+	heartbeatCmd.Flags().StringVar(&heartbeatStatus, "status", string(mailbox.TargetAvailabilityReady), "target availability: ready, degraded, offline, disabled, unknown")
+	heartbeatCmd.Flags().StringVar(&heartbeatSummary, "summary", "", "health summary")
+	heartbeatCmd.Flags().StringSliceVar(&heartbeatCapabilities, "capability", nil, "capability override reported by the worker")
+	cmd.AddCommand(heartbeatCmd)
+
+	var disableReason string
+	disableCmd := &cobra.Command{
+		Use:   "disable <target>",
+		Short: "Disable an execution target for future routing",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir()
+			if err != nil {
+				return err
+			}
+			report, err := session.DisableTarget(resolvedStateDir, args[0], disableReason)
+			if err != nil {
+				return err
+			}
+			printTargetStatus(*report)
+			return nil
+		},
+	}
+	disableCmd.Flags().StringVar(&disableReason, "reason", "", "operator reason for disabling the target")
+	cmd.AddCommand(disableCmd)
+
+	var enableReason string
+	enableCmd := &cobra.Command{
+		Use:   "enable <target>",
+		Short: "Enable an execution target and redispatch pending work",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			resolvedStateDir, err := resolveStateDir()
+			if err != nil {
+				return err
+			}
+			report, redispatched, err := session.EnableTarget(resolvedStateDir, args[0], enableReason)
+			if err != nil {
+				return err
+			}
+			printTargetStatus(*report)
+			fmt.Printf("Redispatched: %d\n", redispatched)
+			return nil
+		},
+	}
+	enableCmd.Flags().StringVar(&enableReason, "reason", "", "operator reason for re-enabling the target")
+	cmd.AddCommand(enableCmd)
+
+	return cmd
+}
+
 func newLogCmd() *cobra.Command {
 	var configPath string
 	var stateDir string
@@ -1354,6 +1509,29 @@ func printStatusReport(report *session.StatusReport) {
 	}
 	_ = w.Flush()
 
+	if len(report.TargetStatuses) > 0 {
+		fmt.Println()
+		fmt.Println("TARGET")
+		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "NAME\tKIND\tAVAILABILITY\tPENDING\tFAILED\tLAST-DISPATCH\tSUMMARY")
+		for _, target := range report.TargetStatuses {
+			lastDispatch := "-"
+			if target.LastDispatch != nil {
+				lastDispatch = formatAge(time.Since(*target.LastDispatch))
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+				target.Name,
+				target.Kind,
+				target.Availability,
+				target.PendingDispatches,
+				target.FailedDispatches,
+				lastDispatch,
+				target.Summary,
+			)
+		}
+		_ = tw.Flush()
+	}
+
 	fmt.Println()
 	fmt.Printf("FLOW\nsent=%d  acked=%d  done=%d  pending=%d  retrying=%d  failed=%d\n",
 		report.FlowStats.Sent,
@@ -1374,6 +1552,66 @@ func printStatusReport(report *session.StatusReport) {
 
 func filepathJoin(elem ...string) string {
 	return strings.Join(elem, string(os.PathSeparator))
+}
+
+func parseTargetAvailability(raw string) (mailbox.TargetAvailability, error) {
+	switch mailbox.TargetAvailability(strings.TrimSpace(raw)) {
+	case mailbox.TargetAvailabilityReady, mailbox.TargetAvailabilityDegraded, mailbox.TargetAvailabilityOffline, mailbox.TargetAvailabilityDisabled, mailbox.TargetAvailabilityUnknown:
+		return mailbox.TargetAvailability(strings.TrimSpace(raw)), nil
+	default:
+		return "", fmt.Errorf("invalid target availability %q", raw)
+	}
+}
+
+func printTargetStatuses(statuses []session.TargetStatus) {
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tKIND\tAVAILABILITY\tPENDING\tFAILED\tLAST-HEARTBEAT\tLAST-DISPATCH\tSUMMARY")
+	for _, status := range statuses {
+		lastHeartbeat := "-"
+		if status.LastHeartbeat != nil {
+			lastHeartbeat = formatAge(time.Since(*status.LastHeartbeat))
+		}
+		lastDispatch := "-"
+		if status.LastDispatch != nil {
+			lastDispatch = formatAge(time.Since(*status.LastDispatch))
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\t%s\t%s\t%s\n",
+			status.Name,
+			status.Kind,
+			status.Availability,
+			status.PendingDispatches,
+			status.FailedDispatches,
+			lastHeartbeat,
+			lastDispatch,
+			status.Summary,
+		)
+	}
+	_ = tw.Flush()
+}
+
+func printTargetStatus(status session.TargetStatus) {
+	fmt.Printf("Target: %s\n", status.Name)
+	fmt.Printf("Kind: %s\n", status.Kind)
+	fmt.Printf("Availability: %s\n", status.Availability)
+	fmt.Printf("Pane-Backed: %t\n", status.PaneBacked)
+	fmt.Printf("Pending Dispatches: %d\n", status.PendingDispatches)
+	fmt.Printf("Failed Dispatches: %d\n", status.FailedDispatches)
+	fmt.Printf("Summary: %s\n", status.Summary)
+	if status.Source != "" {
+		fmt.Printf("Source: %s\n", status.Source)
+	}
+	if status.DisabledReason != "" {
+		fmt.Printf("Disabled Reason: %s\n", status.DisabledReason)
+	}
+	if status.LastError != "" {
+		fmt.Printf("Last Error: %s\n", status.LastError)
+	}
+	if status.LastHeartbeat != nil {
+		fmt.Printf("Last Heartbeat: %s\n", status.LastHeartbeat.Format(time.RFC3339))
+	}
+	if status.LastDispatch != nil {
+		fmt.Printf("Last Dispatch: %s\n", status.LastDispatch.Format(time.RFC3339))
+	}
 }
 
 func stubRun(_ *cobra.Command, _ []string) {

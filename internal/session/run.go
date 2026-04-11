@@ -229,6 +229,14 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		return nil, err
 	}
 
+	targetCfg, err := resolveExecutionTargetConfig(cfg, owner)
+	if err != nil {
+		return nil, err
+	}
+	if err := dispatchNonLocalTask(cfg, targetCfg, owner, &task); err != nil {
+		return nil, err
+	}
+
 	return &task, nil
 }
 
@@ -341,19 +349,31 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 
 func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun, req protocol.RouteChildTaskRequest, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
 	kindCandidates, domainCandidates := routeCandidates(cfg, run.AllowedOwners, req.TaskClass, req.Domains)
+	filteredKindCandidates, excludedTargets, err := filterCandidatesByTargetAvailability(cfg, kindCandidates)
+	if err != nil {
+		return nil, nil, err
+	}
+	filteredDomainCandidates, domainExcludedTargets, err := filterCandidatesByTargetAvailability(cfg, domainCandidates)
+	if err != nil {
+		return nil, nil, err
+	}
+	excludedTargets = uniqueRouteTargetExclusions(append(excludedTargets, domainExcludedTargets...))
 	rankCandidates(kindCandidates)
 	rankCandidates(domainCandidates)
+	rankCandidates(filteredKindCandidates)
+	rankCandidates(filteredDomainCandidates)
 
 	if req.OwnerOverride != "" {
-		return routeChildTaskOverrideSelection(cfg, req, run, kindCandidates, existingDuplicate)
+		return routeChildTaskOverrideSelection(cfg, req, run, filteredKindCandidates, existingDuplicate)
 	}
-	if len(domainCandidates) == 0 {
+	if len(filteredDomainCandidates) == 0 {
 		rejection := &protocol.RouteRejection{
 			TaskClass:          req.TaskClass,
 			Domains:            slices.Clone(req.Domains),
 			AllowedOwners:      slices.Clone(run.AllowedOwners),
-			EligibleCandidates: candidateNames(kindCandidates),
-			Suggestions:        routeSuggestions(req.TaskClass, kindCandidates),
+			EligibleCandidates: candidateNames(filteredKindCandidates),
+			Suggestions:        routeSuggestions(req.TaskClass, filteredKindCandidates, excludedTargets),
+			ExcludedTargets:    excludedTargets,
 		}
 		if err := rejection.Validate(); err != nil {
 			return nil, nil, fmt.Errorf("validate route rejection: %w", err)
@@ -362,7 +382,7 @@ func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun,
 		return nil, nil, rejection
 	}
 
-	selected := domainCandidates[0]
+	selected := filteredDomainCandidates[0]
 	baseline := selected
 	var adaptiveExplanation *protocol.AdaptiveRoutingExplanation
 	if cfg.Routing.Adaptive.Enabled {
@@ -370,9 +390,9 @@ func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun,
 		if err != nil {
 			return nil, nil, err
 		}
-		adaptiveExplanation = adaptiveRoutingExplanation(req.TaskClass, req.Domains, baseline, domainCandidates, preferenceSet)
+		adaptiveExplanation = adaptiveRoutingExplanation(req.TaskClass, req.Domains, baseline, filteredDomainCandidates, preferenceSet)
 		if adaptiveExplanation != nil && adaptiveExplanation.Applied {
-			for _, candidate := range domainCandidates {
+			for _, candidate := range filteredDomainCandidates {
 				if protocol.AgentName(candidate.agent.Name) == adaptiveExplanation.PreferredOwner {
 					selected = candidate
 					break
@@ -382,11 +402,12 @@ func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun,
 	}
 
 	decision := &protocol.RoutingDecision{
-		Status:        "selected",
-		SelectedOwner: protocol.AgentName(selected.agent.Name),
-		Candidates:    candidateNames(domainCandidates),
-		TieBreak:      "route_priority desc, config_order asc",
-		Adaptive:      adaptiveExplanation,
+		Status:          "selected",
+		SelectedOwner:   protocol.AgentName(selected.agent.Name),
+		Candidates:      candidateNames(filteredDomainCandidates),
+		TieBreak:        "route_priority desc, config_order asc",
+		ExcludedTargets: excludedTargets,
+		Adaptive:        adaptiveExplanation,
 	}
 	if existingDuplicate != nil {
 		decision.DuplicateStatus = "fanout"
@@ -586,6 +607,28 @@ func resolveExecutionTarget(cfg *config.ResolvedConfig, agent *config.AgentConfi
 	return protocol.ExecutionTarget{}, fmt.Errorf("unknown execution target %q for agent %q", targetName, agent.Name)
 }
 
+func resolveExecutionTargetConfig(cfg *config.ResolvedConfig, agent *config.AgentConfig) (config.ExecutionTargetConfig, error) {
+	target, err := resolveExecutionTarget(cfg, agent)
+	if err != nil {
+		return config.ExecutionTargetConfig{}, err
+	}
+	if target.Name == "local" && target.Kind == "local" {
+		return config.ExecutionTargetConfig{
+			Name:         target.Name,
+			Kind:         target.Kind,
+			Description:  target.Description,
+			Capabilities: append([]string(nil), target.Capabilities...),
+			PaneBacked:   target.PaneBacked,
+		}, nil
+	}
+	for _, targetCfg := range cfg.ExecutionTargets {
+		if targetCfg.Name == target.Name {
+			return targetCfg, nil
+		}
+	}
+	return config.ExecutionTargetConfig{}, fmt.Errorf("unknown execution target config %q", target.Name)
+}
+
 func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentName, taskClass protocol.TaskClass, domains []string) ([]routeCandidate, []routeCandidate) {
 	kindCandidates := make([]routeCandidate, 0, len(allowedOwners))
 	domainCandidates := make([]routeCandidate, 0, len(allowedOwners))
@@ -619,6 +662,29 @@ func routeChildTaskOverrideSelection(cfg *config.ResolvedConfig, req protocol.Ro
 	}
 	if !containsAgentName(run.AllowedOwners, owner.Name) {
 		return nil, nil, fmt.Errorf("owner override %q is not an allowed owner for run %q", owner.Name, run.RunID)
+	}
+	targetCfg, err := resolveExecutionTargetConfig(cfg, owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, targetCfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	if availability.BlocksRouting() {
+		return nil, nil, &protocol.RouteRejection{
+			TaskClass:          req.TaskClass,
+			Domains:            slices.Clone(req.Domains),
+			AllowedOwners:      slices.Clone(run.AllowedOwners),
+			EligibleCandidates: candidateNames(kindCandidates),
+			Suggestions:        routeSuggestions(req.TaskClass, kindCandidates, []protocol.RouteTargetExclusion{{Owner: protocol.AgentName(owner.Name), TargetName: targetCfg.Name, Status: string(availability), Reason: summary}}),
+			ExcludedTargets: []protocol.RouteTargetExclusion{{
+				Owner:      protocol.AgentName(owner.Name),
+				TargetName: targetCfg.Name,
+				Status:     string(availability),
+				Reason:     summary,
+			}},
+		}
 	}
 
 	candidates := candidateNames(kindCandidates)
@@ -743,17 +809,73 @@ func roleCoversDomains(role config.RoleSpec, domains []string) bool {
 	return true
 }
 
-func routeSuggestions(taskClass protocol.TaskClass, candidates []routeCandidate) []string {
+func routeSuggestions(taskClass protocol.TaskClass, candidates []routeCandidate, excludedTargets []protocol.RouteTargetExclusion) []string {
 	if len(candidates) == 0 {
-		return []string{
+		suggestions := []string{
 			fmt.Sprintf("Choose a different task_class or add an allowed owner with role.kind %q.", taskClass),
 		}
+		for _, exclusion := range excludedTargets {
+			suggestions = append(suggestions, fmt.Sprintf("Restore target %s for owner %s (%s).", exclusion.TargetName, exclusion.Owner, exclusion.Status))
+		}
+		return suggestions
 	}
 
-	return []string{
+	suggestions := []string{
 		"Choose domains that are covered by one of the eligible_candidates.",
 		"Add the missing domain to an allowed owner's role.domains and retry.",
 	}
+	for _, exclusion := range excludedTargets {
+		suggestions = append(suggestions, fmt.Sprintf("Restore target %s for owner %s (%s).", exclusion.TargetName, exclusion.Owner, exclusion.Status))
+	}
+	return suggestions
+}
+
+func filterCandidatesByTargetAvailability(cfg *config.ResolvedConfig, candidates []routeCandidate) ([]routeCandidate, []protocol.RouteTargetExclusion, error) {
+	filtered := make([]routeCandidate, 0, len(candidates))
+	excluded := make([]protocol.RouteTargetExclusion, 0)
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		targetCfg, err := resolveExecutionTargetConfig(cfg, candidate.agent)
+		if err != nil {
+			return nil, nil, err
+		}
+		availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, targetCfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		key := candidate.agent.Name + "|" + targetCfg.Name
+		if availability.BlocksRouting() {
+			if _, ok := seen[key]; !ok {
+				excluded = append(excluded, protocol.RouteTargetExclusion{
+					Owner:      protocol.AgentName(candidate.agent.Name),
+					TargetName: targetCfg.Name,
+					Status:     string(availability),
+					Reason:     summary,
+				})
+				seen[key] = struct{}{}
+			}
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	return filtered, excluded, nil
+}
+
+func uniqueRouteTargetExclusions(values []protocol.RouteTargetExclusion) []protocol.RouteTargetExclusion {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]protocol.RouteTargetExclusion, 0, len(values))
+	for _, value := range values {
+		key := strings.Join([]string{string(value.Owner), value.TargetName, value.Status, value.Reason}, "|")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func duplicatePolicyBlocks(cfg *config.ResolvedConfig, taskClass protocol.TaskClass) bool {

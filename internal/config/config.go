@@ -51,11 +51,23 @@ type Config struct {
 }
 
 type ExecutionTargetConfig struct {
-	Name         string   `yaml:"name"`
-	Kind         string   `yaml:"kind"`
-	Description  string   `yaml:"description,omitempty"`
-	Capabilities []string `yaml:"capabilities,omitempty"`
-	PaneBacked   bool     `yaml:"pane_backed"`
+	Name         string               `yaml:"name"`
+	Kind         string               `yaml:"kind"`
+	Description  string               `yaml:"description,omitempty"`
+	Capabilities []string             `yaml:"capabilities,omitempty"`
+	PaneBacked   bool                 `yaml:"pane_backed"`
+	Dispatch     TargetDispatchConfig `yaml:"dispatch,omitempty"`
+	Health       TargetHealthConfig   `yaml:"health,omitempty"`
+}
+
+type TargetDispatchConfig struct {
+	Command string            `yaml:"command,omitempty"`
+	Workdir string            `yaml:"workdir,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
+}
+
+type TargetHealthConfig struct {
+	HeartbeatTimeout Duration `yaml:"heartbeat_timeout,omitempty"`
 }
 
 type SessionConfig struct {

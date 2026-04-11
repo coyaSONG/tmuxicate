@@ -800,6 +800,11 @@ func (d *RoutingDecision) Validate() error {
 			return fmt.Errorf("suggestions[%d] must not be blank", i)
 		}
 	}
+	for i := range d.ExcludedTargets {
+		if err := d.ExcludedTargets[i].Validate(); err != nil {
+			return fmt.Errorf("excluded_targets[%d]: %w", i, err)
+		}
+	}
 	if d.Adaptive != nil {
 		if err := d.Adaptive.Validate(); err != nil {
 			return fmt.Errorf("adaptive: %w", err)
@@ -952,8 +957,32 @@ func (r *RouteRejection) Validate() error {
 	if len(r.Suggestions) == 0 {
 		return errors.New("suggestions must contain at least one retry hint")
 	}
+	for i := range r.ExcludedTargets {
+		if err := r.ExcludedTargets[i].Validate(); err != nil {
+			return fmt.Errorf("excluded_targets[%d]: %w", i, err)
+		}
+	}
 
 	r.Domains = domains
+	return nil
+}
+
+func (e *RouteTargetExclusion) Validate() error {
+	if e == nil {
+		return errors.New("route target exclusion is required")
+	}
+	if strings.TrimSpace(string(e.Owner)) == "" {
+		return errors.New("owner is required")
+	}
+	if strings.TrimSpace(e.TargetName) == "" {
+		return errors.New("target_name is required")
+	}
+	if strings.TrimSpace(e.Status) == "" {
+		return errors.New("status is required")
+	}
+	if strings.TrimSpace(e.Reason) == "" {
+		return errors.New("reason is required")
+	}
 	return nil
 }
 
