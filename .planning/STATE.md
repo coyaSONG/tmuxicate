@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Coordinator Automation
-current_phase: 05
-current_phase_name: run-summaries
-current_plan: Complete
-status: completed
-stopped_at: Phase 05 complete
-last_updated: "2026-04-11T08:58:25.111Z"
+milestone: v1.1
+milestone_name: Adaptive Coordination
+current_phase: 06
+current_phase_name: adaptive-routing-signals
+current_plan: Not started
+status: ready
+stopped_at: Ready for Phase 06 planning
+last_updated: "2026-04-11T09:10:00.000Z"
 last_activity: 2026-04-11
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,22 +24,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Planning the next milestone after shipping v1.0 Coordinator Automation
+**Current focus:** Milestone v1.1 Adaptive Coordination planning complete; Phase 06 is next
 
 ## Current Position
 
-Phase: 05 (run-summaries) — COMPLETE
-Current Phase: 05
-Current Phase Name: run-summaries
-Plan: 2 of 2
-Current Plan: Complete
+Phase: 06 (adaptive-routing-signals) — NOT STARTED
+Current Phase: 06
+Current Phase Name: adaptive-routing-signals
+Plan: —
+Current Plan: Not started
 Total Plans in Phase: 2
-Total Phases: 5
-Status: Milestone v1.0 Coordinator Automation complete
+Total Phases: 4
+Status: Ready to discuss Phase 06 for milestone v1.1 Adaptive Coordination
 Last activity: 2026-04-11
-Last Activity Description: v1.0 Coordinator Automation milestone completed and archived
+Last Activity Description: v1.1 Adaptive Coordination initialized with requirements and roadmap
 
-Progress: [██████████] 100%
+Progress: [----------] 0%
 
 ## Performance Metrics
 
@@ -105,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T14:03:56.120Z
-Stopped at: Phase 05 complete
-Resume file: .planning/phases/05-run-summaries/05-VERIFICATION.md
+Last session: 2026-04-11T09:10:00.000Z
+Stopped at: Milestone v1.1 initialized
+Resume file: —
