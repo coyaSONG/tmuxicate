@@ -975,22 +975,25 @@ func TestRunCreatesCoordinatorArtifactsAndRootMessage(t *testing.T) {
 
 	wantSnapshot := []protocol.AgentSnapshot{
 		{
-			Name:      "pm",
-			Alias:     "lead",
-			Role:      "research",
-			Teammates: []string{"backend", "reviewer", "norole"},
+			Name:            "pm",
+			Alias:           "lead",
+			Role:            "research",
+			Teammates:       []string{"backend", "reviewer", "norole"},
+			ExecutionTarget: implicitLocalExecutionTarget(),
 		},
 		{
-			Name:      "backend",
-			Alias:     "dev",
-			Role:      "implementation",
-			Teammates: []string{"pm", "reviewer"},
+			Name:            "backend",
+			Alias:           "dev",
+			Role:            "implementation",
+			Teammates:       []string{"pm", "reviewer"},
+			ExecutionTarget: implicitLocalExecutionTarget(),
 		},
 		{
-			Name:      "reviewer",
-			Alias:     "qa",
-			Role:      "review",
-			Teammates: []string{"pm", "backend"},
+			Name:            "reviewer",
+			Alias:           "qa",
+			Role:            "review",
+			Teammates:       []string{"pm", "backend"},
+			ExecutionTarget: implicitLocalExecutionTarget(),
 		},
 	}
 	if !reflect.DeepEqual(run.TeamSnapshot, wantSnapshot) {
@@ -1315,4 +1318,14 @@ func testExecutionTargetRouteConfig(t *testing.T) *config.ResolvedConfig {
 	}
 
 	return cfg
+}
+
+func implicitLocalExecutionTarget() protocol.ExecutionTarget {
+	return protocol.ExecutionTarget{
+		Name:         "local",
+		Kind:         "local",
+		Description:  "Implicit local pane-backed execution target",
+		Capabilities: []string{"local", "pane"},
+		PaneBacked:   true,
+	}
 }

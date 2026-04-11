@@ -29,7 +29,10 @@ func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*pro
 		return nil, err
 	}
 
-	allowedOwners, teamSnapshot := routingBaseline(cfg, coordinator)
+	allowedOwners, teamSnapshot, err := routingBaseline(cfg, coordinator)
+	if err != nil {
+		return nil, err
+	}
 	if len(allowedOwners) == 0 {
 		return nil, fmt.Errorf("allowed_owners must contain at least one teammate with declared role")
 	}
@@ -161,6 +164,11 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		routingDecision = &decision
 	}
 
+	placement, err := selectTaskPlacement(cfg, owner)
+	if err != nil {
+		return nil, err
+	}
+
 	taskSeq, err := store.AllocateSeq()
 	if err != nil {
 		return nil, fmt.Errorf("allocate task sequence: %w", err)
@@ -183,6 +191,7 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		NormalizedDomains: slices.Clone(req.NormalizedDomains),
 		DuplicateKey:      strings.TrimSpace(req.DuplicateKey),
 		RoutingDecision:   routingDecision,
+		Placement:         placement,
 		OverrideReason:    strings.TrimSpace(req.OverrideReason),
 		MessageID:         protocol.NewMessageID(messageSeq),
 		ThreadID:          run.RootThreadID,
@@ -397,14 +406,20 @@ func createWorkflowMessage(cfg *config.ResolvedConfig, store *mailbox.Store, inp
 	return nil
 }
 
-func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig) ([]protocol.AgentName, []protocol.AgentSnapshot) {
+func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig) ([]protocol.AgentName, []protocol.AgentSnapshot, error) {
+	coordinatorTarget, err := resolveExecutionTarget(cfg, coordinator)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	allowedOwners := make([]protocol.AgentName, 0, len(coordinator.Teammates))
 	snapshots := []protocol.AgentSnapshot{
 		{
-			Name:      protocol.AgentName(coordinator.Name),
-			Alias:     coordinator.Alias,
-			Role:      coordinator.Role.Kind,
-			Teammates: slices.Clone(coordinator.Teammates),
+			Name:            protocol.AgentName(coordinator.Name),
+			Alias:           coordinator.Alias,
+			Role:            coordinator.Role.Kind,
+			Teammates:       slices.Clone(coordinator.Teammates),
+			ExecutionTarget: coordinatorTarget,
 		},
 	}
 
@@ -416,17 +431,22 @@ func routingBaseline(cfg *config.ResolvedConfig, coordinator *config.AgentConfig
 		if !agent.Role.IsDeclared() {
 			continue
 		}
+		target, err := resolveExecutionTarget(cfg, agent)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		allowedOwners = append(allowedOwners, protocol.AgentName(agent.Name))
 		snapshots = append(snapshots, protocol.AgentSnapshot{
-			Name:      protocol.AgentName(agent.Name),
-			Alias:     agent.Alias,
-			Role:      agent.Role.Kind,
-			Teammates: slices.Clone(agent.Teammates),
+			Name:            protocol.AgentName(agent.Name),
+			Alias:           agent.Alias,
+			Role:            agent.Role.Kind,
+			Teammates:       slices.Clone(agent.Teammates),
+			ExecutionTarget: target,
 		})
 	}
 
-	return allowedOwners, snapshots
+	return allowedOwners, snapshots, nil
 }
 
 func resolveAgentConfig(cfg *config.ResolvedConfig, target string) (*config.AgentConfig, error) {
@@ -455,6 +475,59 @@ func containsString(values []string, want string) bool {
 
 func containsAgentName(values []protocol.AgentName, want string) bool {
 	return slices.Contains(values, protocol.AgentName(want))
+}
+
+func selectTaskPlacement(cfg *config.ResolvedConfig, owner *config.AgentConfig) (*protocol.TaskPlacement, error) {
+	target, err := resolveExecutionTarget(cfg, owner)
+	if err != nil {
+		return nil, err
+	}
+
+	reason := fmt.Sprintf("owner %q uses implicit local pane-backed target", owner.Name)
+	if strings.TrimSpace(owner.ExecutionTarget) != "" {
+		reason = fmt.Sprintf("owner %q is bound to execution target %q", owner.Name, target.Name)
+	}
+
+	return &protocol.TaskPlacement{
+		Target: target,
+		Reason: reason,
+	}, nil
+}
+
+func resolveExecutionTarget(cfg *config.ResolvedConfig, agent *config.AgentConfig) (protocol.ExecutionTarget, error) {
+	if cfg == nil {
+		return protocol.ExecutionTarget{}, fmt.Errorf("resolved config is required")
+	}
+	if agent == nil {
+		return protocol.ExecutionTarget{}, fmt.Errorf("agent config is required")
+	}
+
+	targetName := strings.TrimSpace(agent.ExecutionTarget)
+	if targetName == "" {
+		return protocol.ExecutionTarget{
+			Name:         "local",
+			Kind:         "local",
+			Description:  "Implicit local pane-backed execution target",
+			Capabilities: []string{"local", "pane"},
+			PaneBacked:   true,
+		}, nil
+	}
+
+	for _, target := range cfg.ExecutionTargets {
+		if target.Name != targetName {
+			continue
+		}
+
+		return protocol.ExecutionTarget{
+			Name:         target.Name,
+			Kind:         target.Kind,
+			Description:  target.Description,
+			Capabilities: slices.Clone(target.Capabilities),
+			PaneBacked:   target.PaneBacked,
+		}, nil
+	}
+
+	return protocol.ExecutionTarget{}, fmt.Errorf("unknown execution target %q for agent %q", targetName, agent.Name)
 }
 
 func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentName, taskClass protocol.TaskClass, domains []string) ([]routeCandidate, []routeCandidate) {
@@ -559,11 +632,11 @@ func adaptiveRoutingExplanation(taskClass protocol.TaskClass, normalizedDomains 
 	}
 
 	var (
-		bestCandidate   routeCandidate
-		haveBest        bool
-		bestPreference  *protocol.AdaptiveRoutingPreference
-		scoreTie        bool
-		matchedCount    int
+		bestCandidate  routeCandidate
+		haveBest       bool
+		bestPreference *protocol.AdaptiveRoutingPreference
+		scoreTie       bool
+		matchedCount   int
 	)
 	for index := range candidates {
 		candidate := candidates[index]
