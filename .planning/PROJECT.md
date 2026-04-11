@@ -8,6 +8,16 @@
 
 A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
 
+## Current Milestone: v1.1 Adaptive Coordination
+
+**Goal:** Make coordinator decisions more adaptive across runs and blocker recovery while expanding execution targets and operator visibility without weakening the durable, inspectable workflow model.
+
+**Target features:**
+- Routing preferences learned from prior coordinator runs with explicit explanation of why an owner was selected
+- Partial replanning after blockers that preserves lineage and operator control
+- Remote or sandboxed worker targets alongside local `tmux` panes
+- Richer run timeline and filtering views for operators
+
 ## Requirements
 
 ### Validated
@@ -28,7 +38,6 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 - [ ] Coordinator learns routing preferences from prior runs without hiding why an owner was selected
 - [ ] Coordinator can partially re-plan a run after a blocker while preserving operator visibility and explicit escalation
-- [ ] Coordinator can manage nested teams or multiple coordinators without collapsing the current durable workflow model
 - [ ] Coordinator can target remote or sandboxed worker environments in addition to local `tmux` panes
 - [ ] Operator can inspect richer coordinator dashboards with per-run timelines and filtering
 
@@ -97,4 +106,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-11 after v1.0 milestone completion*
+*Last updated: 2026-04-11 after starting v1.1 Adaptive Coordination*
