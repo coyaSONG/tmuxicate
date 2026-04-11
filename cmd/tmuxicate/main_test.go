@@ -328,6 +328,121 @@ func TestRunRouteTaskCommandPrintsAdaptiveDecisionEvidence(t *testing.T) {
 	}
 }
 
+func TestRunRouteTaskDryRunShowsExecutionTargetWithoutCreatingTask(t *testing.T) {
+	t.Parallel()
+
+	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := session.Run(cfg, store, session.RunRequest{
+		Goal:        "Preview execution target placement before routing persists work",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	output, err := executeRootCommand(t,
+		"run",
+		"route-task",
+		"--config",
+		configPath,
+		"--run",
+		string(run.RunID),
+		"--task-class",
+		"implementation",
+		"--domain",
+		"session",
+		"--domain",
+		"protocol",
+		"--goal",
+		"Preview sandbox placement",
+		"--expected-output",
+		"preview shows selected target without creating coordinator task artifacts",
+		"--dry-run",
+	)
+	if err != nil {
+		t.Fatalf("run route-task dry-run command: %v", err)
+	}
+
+	requiredSnippets := []string{
+		"Preview Only: true",
+		"Selected Owner:",
+		"Execution Target:",
+		"Target Kind:",
+		"Target Capabilities:",
+		"Placement Reason:",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected dry-run output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+
+	entries, err := os.ReadDir(mailbox.RunTasksDir(cfg.Session.StateDir, run.RunID))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read run tasks dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected dry-run to avoid creating child tasks, found %d entries", len(entries))
+	}
+}
+
+func TestRunRouteTaskOutputIncludesExecutionTargetAfterPersist(t *testing.T) {
+	t.Parallel()
+
+	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
+	store := mailbox.NewStore(cfg.Session.StateDir)
+	run, err := session.Run(cfg, store, session.RunRequest{
+		Goal:        "Persist execution target placement through CLI routing",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	output, err := executeRootCommand(t,
+		"run",
+		"route-task",
+		"--config",
+		configPath,
+		"--run",
+		string(run.RunID),
+		"--task-class",
+		"implementation",
+		"--domain",
+		"session",
+		"--domain",
+		"protocol",
+		"--goal",
+		"Persist sandbox placement",
+		"--expected-output",
+		"persisted route output includes execution target labels",
+	)
+	if err != nil {
+		t.Fatalf("run route-task command: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 || !strings.HasPrefix(lines[0], "task_") {
+		t.Fatalf("expected persisted route output to start with task id\noutput:\n%s", output)
+	}
+
+	requiredSnippets := []string{
+		"Selected Owner:",
+		"Execution Target:",
+		"Target Kind:",
+		"Target Capabilities:",
+		"Placement Reason:",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected persisted route output to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 type cliSummaryFixture struct {
 	cfg           *config.ResolvedConfig
 	configPath    string
@@ -639,6 +754,67 @@ func testAdaptiveCLIConfig(t *testing.T) *config.ResolvedConfig {
 			},
 			Pane:      config.PaneConfig{Slot: "bottom"},
 			Teammates: []string{"pm", "backend-fast", "backend-steady"},
+		},
+	}
+
+	return cfg
+}
+
+func testExecutionTargetCLIConfig(t *testing.T) *config.ResolvedConfig {
+	t.Helper()
+
+	cfg := testCLIConfig(t)
+	cfg.ExecutionTargets = []config.ExecutionTargetConfig{
+		{
+			Name:         "sandbox",
+			Kind:         "sandbox",
+			Description:  "Sandbox worker",
+			Capabilities: []string{"sandbox", "ephemeral"},
+			PaneBacked:   false,
+		},
+	}
+	cfg.Agents = []config.AgentConfig{
+		{
+			Name:    "pm",
+			Alias:   "lead",
+			Adapter: "generic",
+			Command: "fake-agent",
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassResearch),
+				Domains:     []string{"routing"},
+				Description: "Coordinates execution target CLI tests",
+			},
+			Pane:      config.PaneConfig{Slot: "main"},
+			Teammates: []string{"backend", "reviewer"},
+		},
+		{
+			Name:            "backend",
+			Alias:           "dev",
+			Adapter:         "generic",
+			Command:         "fake-agent",
+			RoutePriority:   20,
+			ExecutionTarget: "sandbox",
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassImplementation),
+				Domains:     []string{"protocol", "session"},
+				Description: "Owns sandboxed implementation work in CLI tests",
+			},
+			Pane:      config.PaneConfig{Slot: "right-top"},
+			Teammates: []string{"pm", "reviewer"},
+		},
+		{
+			Name:          "reviewer",
+			Alias:         "qa",
+			Adapter:       "generic",
+			Command:       "fake-agent",
+			RoutePriority: 10,
+			Role: config.RoleSpec{
+				Kind:        string(protocol.TaskClassReview),
+				Domains:     []string{"protocol", "session"},
+				Description: "Owns review work in CLI execution target tests",
+			},
+			Pane:      config.PaneConfig{Slot: "right-bottom"},
+			Teammates: []string{"pm", "backend"},
 		},
 	}
 

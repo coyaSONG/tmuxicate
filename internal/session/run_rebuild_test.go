@@ -164,6 +164,52 @@ func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
 	}
 }
 
+func TestRunShowIncludesExecutionTargetCapabilitiesAndPlacementReason(t *testing.T) {
+	t.Parallel()
+
+	cfg := testExecutionTargetRouteConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Render durable execution target placement from task YAML",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:    run.RunID,
+		Owner:          "backend-high",
+		Goal:           "Execute implementation work in sandbox",
+		ExpectedOutput: "run show renders placement metadata from canonical task artifacts",
+	})
+	if err != nil {
+		t.Fatalf("add child task: %v", err)
+	}
+
+	writeTaskState(t, cfg.Session.StateDir, string(task.Owner), task.MessageID, task.ThreadID, protocol.FolderStateUnread, "idle")
+
+	graph, err := LoadRunGraph(cfg.Session.StateDir, run.RunID)
+	if err != nil {
+		t.Fatalf("load run graph: %v", err)
+	}
+
+	output := FormatRunGraph(graph)
+	requiredSnippets := []string{
+		"Execution Target:",
+		"Target Kind:",
+		"Target Capabilities:",
+		"Placement Reason:",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected formatted run graph to contain %q\noutput:\n%s", snippet, output)
+		}
+	}
+}
+
 func TestFormatRunGraphIncludesAdaptiveRoutingExplanation(t *testing.T) {
 	t.Parallel()
 
