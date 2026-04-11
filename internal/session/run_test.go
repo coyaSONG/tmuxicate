@@ -802,6 +802,111 @@ func TestChildTaskValidation(t *testing.T) {
 	}
 }
 
+func TestRunCreatesTeamSnapshotWithExecutionTargets(t *testing.T) {
+	t.Parallel()
+
+	cfg := testExecutionTargetRouteConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Snapshot explicit and implicit execution targets",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	snapshots := make(map[protocol.AgentName]protocol.AgentSnapshot, len(run.TeamSnapshot))
+	for _, snapshot := range run.TeamSnapshot {
+		snapshots[snapshot.Name] = snapshot
+	}
+
+	if got := snapshots["backend-high"].ExecutionTarget; got.Name != "sandbox" || got.Kind != "sandbox" {
+		t.Fatalf("backend-high execution target = %#v, want sandbox target", got)
+	}
+	if got := snapshots["backend-low"].ExecutionTarget; got.Name == "" || got.Kind != "local" || !got.PaneBacked {
+		t.Fatalf("backend-low execution target = %#v, want implicit pane-backed local target", got)
+	}
+}
+
+func TestAddChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
+	t.Parallel()
+
+	cfg := testExecutionTargetRouteConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Persist explicit placement for add-task",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+		ParentRunID:    run.RunID,
+		Owner:          "backend-high",
+		Goal:           "Run sandbox implementation work",
+		ExpectedOutput: "Task carries placement metadata",
+		ReviewRequired: true,
+	})
+	if err != nil {
+		t.Fatalf("add child task: %v", err)
+	}
+
+	if task.Placement == nil {
+		t.Fatal("task.Placement = nil, want placement metadata")
+	}
+	if got := task.Placement.Target; got.Name != "sandbox" || got.Kind != "sandbox" {
+		t.Fatalf("placement target = %#v, want sandbox target", got)
+	}
+	if task.Placement.Reason == "" {
+		t.Fatal("placement reason should not be blank")
+	}
+}
+
+func TestRouteChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
+	t.Parallel()
+
+	cfg := testExecutionTargetRouteConfig(t)
+	store := mailbox.NewStore(cfg.Session.StateDir)
+
+	run, err := Run(cfg, store, RunRequest{
+		Goal:        "Persist owner-derived placement during routing",
+		Coordinator: "pm",
+		CreatedBy:   "human",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		RunID:          run.RunID,
+		TaskClass:      protocol.TaskClassImplementation,
+		Domains:        []string{"session", "protocol"},
+		Goal:           "Route implementation work onto sandbox target",
+		ExpectedOutput: "Routed task persists placement metadata from selected owner target",
+	})
+	if err != nil {
+		t.Fatalf("route child task: %v", err)
+	}
+
+	if task.Owner != "backend-high" {
+		t.Fatalf("task owner = %q, want %q", task.Owner, "backend-high")
+	}
+	if task.Placement == nil {
+		t.Fatal("task.Placement = nil, want placement metadata")
+	}
+	if got := task.Placement.Target; got.Name != "sandbox" || got.Kind != "sandbox" {
+		t.Fatalf("placement target = %#v, want sandbox target", got)
+	}
+	if task.Placement.Reason == "" {
+		t.Fatal("placement reason should not be blank")
+	}
+}
+
 func TestCoordinatorPathsStayInsideStateDir(t *testing.T) {
 	t.Parallel()
 
@@ -1184,4 +1289,30 @@ func testRouteTaskConfig(t *testing.T) *config.ResolvedConfig {
 			},
 		},
 	}
+}
+
+func testExecutionTargetRouteConfig(t *testing.T) *config.ResolvedConfig {
+	t.Helper()
+
+	cfg := testRouteTaskConfig(t)
+	cfg.ExecutionTargets = []config.ExecutionTargetConfig{
+		{
+			Name:         "sandbox",
+			Kind:         "sandbox",
+			Description:  "Sandbox worker",
+			Capabilities: []string{"sandbox", "ephemeral"},
+			PaneBacked:   false,
+		},
+	}
+
+	for i := range cfg.Agents {
+		switch cfg.Agents[i].Name {
+		case "backend-high":
+			cfg.Agents[i].ExecutionTarget = "sandbox"
+		case "backend-low":
+			cfg.Agents[i].ExecutionTarget = ""
+		}
+	}
+
+	return cfg
 }

@@ -98,6 +98,307 @@ agents:
 	}
 }
 
+func TestLoadValidConfigWithExecutionTargetsAndLocalFallback(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "tmuxicate.yaml")
+	writeTestFile(t, cfgPath, `
+version: 1
+session:
+  name: remote-targets
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+  window_name: agents
+  layout: triad
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/dev/transcripts
+routing:
+  coordinator: coordinator
+defaults:
+  workdir: .
+execution_targets:
+  - name: sandbox
+    kind: sandbox
+    description: Sandboxed execution host
+    capabilities: [sandbox, ephemeral, sandbox]
+    pane_backed: false
+  - name: remote-linux
+    kind: remote
+    description: Remote Linux worker
+    capabilities: [ssh, linux]
+    pane_backed: false
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+    pane:
+      slot: main
+    teammates: [sandboxed, remote, local]
+  - name: sandboxed
+    alias: sbx
+    adapter: generic
+    command: fake-agent
+    role:
+      kind: implementation
+      domains: [session]
+    execution_target: sandbox
+    pane:
+      slot: right-top
+    teammates: [coordinator]
+  - name: remote
+    alias: ssh
+    adapter: generic
+    command: fake-agent
+    role:
+      kind: implementation
+      domains: [protocol]
+    execution_target: remote-linux
+    pane:
+      slot: right-bottom
+    teammates: [coordinator]
+  - name: local
+    alias: local
+    adapter: claude-code
+    command: claude
+    role:
+      kind: review
+      domains: [session]
+    pane:
+      slot: left-bottom
+    teammates: [coordinator]
+`)
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+
+	if len(cfg.ExecutionTargets) != 2 {
+		t.Fatalf("ExecutionTargets = %d, want 2", len(cfg.ExecutionTargets))
+	}
+	if cfg.ExecutionTargets[0].Name != "sandbox" || cfg.ExecutionTargets[0].Kind != "sandbox" {
+		t.Fatalf("sandbox target = %#v, want sandbox target round-trip", cfg.ExecutionTargets[0])
+	}
+	if cfg.ExecutionTargets[1].Name != "remote-linux" || cfg.ExecutionTargets[1].Kind != "remote" {
+		t.Fatalf("remote target = %#v, want remote target round-trip", cfg.ExecutionTargets[1])
+	}
+	if cfg.Agents[1].ExecutionTarget != "sandbox" {
+		t.Fatalf("sandboxed agent execution_target = %q, want sandbox", cfg.Agents[1].ExecutionTarget)
+	}
+	if cfg.Agents[2].ExecutionTarget != "remote-linux" {
+		t.Fatalf("remote agent execution_target = %q, want remote-linux", cfg.Agents[2].ExecutionTarget)
+	}
+	if cfg.Agents[3].ExecutionTarget != "" {
+		t.Fatalf("local agent execution_target = %q, want implicit local fallback", cfg.Agents[3].ExecutionTarget)
+	}
+
+	localOnlyPath := filepath.Join(tmpDir, "local-only.yaml")
+	writeTestFile(t, localOnlyPath, `
+version: 1
+session:
+  name: local-only
+  workspace: .
+  state_dir: .tmuxicate/sessions/local
+  window_name: agents
+  layout: triad
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/local/transcripts
+routing:
+  coordinator: coordinator
+defaults:
+  workdir: .
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+    pane:
+      slot: main
+`)
+
+	localOnly, err := Load(localOnlyPath)
+	if err != nil {
+		t.Fatalf("Load() local-only config unexpected error: %v", err)
+	}
+	if len(localOnly.ExecutionTargets) != 0 {
+		t.Fatalf("local-only ExecutionTargets = %#v, want none", localOnly.ExecutionTargets)
+	}
+	if localOnly.Agents[0].ExecutionTarget != "" {
+		t.Fatalf("local-only agent execution_target = %q, want implicit local fallback", localOnly.Agents[0].ExecutionTarget)
+	}
+}
+
+func TestLoadExecutionTargetsRejectsUnknownBindingsAndDuplicateNames(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		contents string
+		wantErr  string
+	}{
+		{
+			name: "duplicate target names",
+			contents: `
+version: 1
+session:
+  name: invalid-targets
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+  window_name: agents
+  layout: triad
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/dev/transcripts
+routing:
+  coordinator: coordinator
+defaults:
+  workdir: .
+execution_targets:
+  - name: sandbox
+    kind: sandbox
+    pane_backed: false
+  - name: sandbox
+    kind: remote
+    pane_backed: false
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+    pane:
+      slot: main
+`,
+			wantErr: "duplicate execution target name",
+		},
+		{
+			name: "invalid target kind",
+			contents: `
+version: 1
+session:
+  name: invalid-target-kind
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+  window_name: agents
+  layout: triad
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/dev/transcripts
+routing:
+  coordinator: coordinator
+defaults:
+  workdir: .
+execution_targets:
+  - name: sandbox
+    kind: hovercraft
+    pane_backed: false
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+    pane:
+      slot: main
+`,
+			wantErr: "invalid execution_targets[0].kind",
+		},
+		{
+			name: "unknown agent execution target binding",
+			contents: `
+version: 1
+session:
+  name: invalid-target-binding
+  workspace: .
+  state_dir: .tmuxicate/sessions/dev
+  window_name: agents
+  layout: triad
+delivery:
+  mode: notify_then_read
+  ack_timeout: 2m
+  retry_interval: 30s
+  max_retries: 3
+transcript:
+  mode: pipe-pane
+  dir: .tmuxicate/sessions/dev/transcripts
+routing:
+  coordinator: coordinator
+defaults:
+  workdir: .
+execution_targets:
+  - name: sandbox
+    kind: sandbox
+    pane_backed: false
+agents:
+  - name: coordinator
+    alias: pm
+    adapter: codex
+    command: codex
+    role:
+      kind: research
+      domains: [routing]
+    execution_target: missing-target
+    pane:
+      slot: main
+`,
+			wantErr: "unknown execution target",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpDir := t.TempDir()
+			cfgPath := filepath.Join(tmpDir, "tmuxicate.yaml")
+			writeTestFile(t, cfgPath, tc.contents)
+
+			_, err := Load(cfgPath)
+			if err == nil {
+				t.Fatal("Load() expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("Load() error = %q, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestLoadMissingRequiredFields(t *testing.T) {
 	t.Parallel()
 

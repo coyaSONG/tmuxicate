@@ -371,6 +371,105 @@ func TestPartialReplanValidateRejectsRecursiveOrDuplicateReplacementLinks(t *tes
 	})
 }
 
+func TestCoordinatorRunAndChildTaskValidateExecutionPlacement(t *testing.T) {
+	t.Parallel()
+
+	t.Run("agent snapshot requires target name and kind when execution target metadata is present", func(t *testing.T) {
+		t.Parallel()
+
+		run := &CoordinatorRun{
+			RunID:         NewRunID(1),
+			Goal:          "Validate execution target metadata",
+			Coordinator:   AgentName("pm"),
+			CreatedBy:     AgentName("human"),
+			CreatedAt:     time.Now().UTC(),
+			RootMessageID: NewMessageID(1),
+			RootThreadID:  NewThreadID(1),
+			AllowedOwners: []AgentName{"builder"},
+			TeamSnapshot: []AgentSnapshot{
+				{
+					Name:  "builder",
+					Alias: "dev",
+					Role:  "implementation",
+					ExecutionTarget: ExecutionTarget{
+						Kind: "sandbox",
+					},
+				},
+			},
+		}
+
+		err := run.Validate()
+		if err == nil {
+			t.Fatal("CoordinatorRun.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "team_snapshot[0]", "execution_target", "name") {
+			t.Fatalf("CoordinatorRun.Validate() error = %q, want execution_target name failure", got)
+		}
+	})
+
+	t.Run("child task rejects malformed placement metadata", func(t *testing.T) {
+		t.Parallel()
+
+		task := &ChildTask{
+			TaskID:         NewTaskID(1),
+			ParentRunID:    NewRunID(1),
+			Owner:          AgentName("builder"),
+			Goal:           "Persist execution placement",
+			ExpectedOutput: "Durable target metadata",
+			CreatedAt:      time.Now().UTC(),
+			Placement: &TaskPlacement{
+				Target: ExecutionTarget{
+					Name: "sandbox",
+				},
+			},
+		}
+
+		err := task.Validate()
+		if err == nil {
+			t.Fatal("ChildTask.Validate() expected error, got nil")
+		}
+		if got := err.Error(); !containsAll(got, "placement", "kind") {
+			t.Fatalf("ChildTask.Validate() error = %q, want placement kind failure", got)
+		}
+	})
+
+	t.Run("capabilities normalize deterministically and de-duplicate", func(t *testing.T) {
+		t.Parallel()
+
+		run := &CoordinatorRun{
+			RunID:         NewRunID(1),
+			Goal:          "Normalize execution target capabilities",
+			Coordinator:   AgentName("pm"),
+			CreatedBy:     AgentName("human"),
+			CreatedAt:     time.Now().UTC(),
+			RootMessageID: NewMessageID(1),
+			RootThreadID:  NewThreadID(1),
+			AllowedOwners: []AgentName{"builder"},
+			TeamSnapshot: []AgentSnapshot{
+				{
+					Name:  "builder",
+					Alias: "dev",
+					Role:  "implementation",
+					ExecutionTarget: ExecutionTarget{
+						Name:         "sandbox",
+						Kind:         "sandbox",
+						Capabilities: []string{"ephemeral", "sandbox", "ephemeral", "network"},
+					},
+				},
+			},
+		}
+
+		if err := run.Validate(); err != nil {
+			t.Fatalf("CoordinatorRun.Validate() unexpected error: %v", err)
+		}
+
+		want := []string{"ephemeral", "network", "sandbox"}
+		if got := run.TeamSnapshot[0].ExecutionTarget.Capabilities; !slices.Equal(got, want) {
+			t.Fatalf("ExecutionTarget.Capabilities = %#v, want %#v", got, want)
+		}
+	})
+}
+
 func validBlockerCase() *BlockerCase {
 	now := time.Now().UTC()
 
