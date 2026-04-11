@@ -7,8 +7,8 @@
 
 ### Adaptive Routing
 
-- [ ] **ADAPT-01**: Operator can configure and persist coordinator routing preferences derived from prior run outcomes without changing the mailbox protocol
-- [ ] **ADAPT-02**: Operator can inspect the evidence and rationale behind an adaptive routing decision for each routed child task
+- [x] **ADAPT-01**: Operator can configure and persist coordinator routing preferences derived from prior run outcomes without changing the mailbox protocol
+- [x] **ADAPT-02**: Operator can inspect the evidence and rationale behind an adaptive routing decision for each routed child task
 
 ### Partial Replanning
 
@@ -50,8 +50,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADAPT-01 | Phase 6 | Pending |
-| ADAPT-02 | Phase 6 | Pending |
+| ADAPT-01 | Phase 6 | Complete |
+| ADAPT-02 | Phase 6 | Complete |
 | REPLAN-01 | Phase 7 | Pending |
 | REPLAN-02 | Phase 7 | Pending |
 | EXEC-01 | Phase 8 | Pending |

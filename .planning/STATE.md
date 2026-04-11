@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Adaptive Coordination
-current_phase: 06
-current_phase_name: adaptive-routing-signals
+current_phase: 07
+current_phase_name: partial-replanning-flow
 current_plan: Not started
 status: ready
-stopped_at: Ready for Phase 06 planning
-last_updated: "2026-04-11T09:10:00.000Z"
+stopped_at: Ready for Phase 07 planning
+last_updated: "2026-04-11T10:26:05.435Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 25
 ---
 
 # Project State
@@ -24,28 +24,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-11)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Milestone v1.1 Adaptive Coordination planning complete; Phase 06 is next
+**Current focus:** Phase 06 is complete; Phase 07 Partial Replanning Flow is next
 
 ## Current Position
 
-Phase: 06 (adaptive-routing-signals) — NOT STARTED
-Current Phase: 06
-Current Phase Name: adaptive-routing-signals
+Phase: 07 (partial-replanning-flow) — NOT STARTED
+Current Phase: 07
+Current Phase Name: partial-replanning-flow
 Plan: —
 Current Plan: Not started
 Total Plans in Phase: 2
 Total Phases: 4
-Status: Ready to discuss Phase 06 for milestone v1.1 Adaptive Coordination
+Status: Ready to discuss Phase 07 for milestone v1.1 Adaptive Coordination
 Last activity: 2026-04-11
-Last Activity Description: v1.1 Adaptive Coordination initialized with requirements and roadmap
+Last Activity Description: Phase 06 Adaptive Routing Signals completed with adaptive preference artifacts and route-time evidence
 
-Progress: [----------] 0%
+Progress: [███-------] 25%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 14
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -61,7 +61,7 @@ Progress: [----------] 0%
 
 **Recent Trend:**
 
-- Last 5 plans: 8min, 9min, 14min, 1h, 1h
+- Last 5 plans: 14min, 1h, 1h, 4min, 4min
 - Trend: Stable
 
 | Phase 01 P03 | 8min | 2 tasks | 3 files |
@@ -69,6 +69,8 @@ Progress: [----------] 0%
 | Phase 02 P02 | 14 min | 2 tasks | 9 files |
 | Phase 03 P01 | 1h | 2 tasks | 7 files |
 | Phase 03 P02 | 1h | 3 tasks | 6 files |
+| Phase 06 P01 | 4min | 2 tasks | 11 files |
+| Phase 06 P02 | 4min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -94,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase 04]: Blocker handling uses durable `BlockerCase` artifacts with explicit reroute, escalation, and operator resolution paths.
 - [Phase 05]: Run summaries are a derived `RunGraph` view rendered at the top of `run show`, not a new persisted artifact or command family.
 - [Phase 05]: Completing the coordinator root task prints the same shared summary once using canonical root-message metadata.
+- [Phase 06]: Adaptive routing inputs now live in one coordinator-keyed YAML artifact under the existing coordinator tree.
+- [Phase 06]: Adaptive preference rebuilds reuse RunGraph plus RunSummary instead of transcript scanning or a second reporting backend.
+- [Phase 06]: Adaptive routing only changes selection when a unique exact-match preference beats the deterministic baseline; ties fall back to route_priority desc, config_order asc.
+- [Phase 06]: Adaptive explanations are additive RoutingDecision fields rendered from task YAML in both route-task output and run show.
 
 ### Pending Todos
 
@@ -105,6 +111,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T09:10:00.000Z
-Stopped at: Milestone v1.1 initialized
-Resume file: —
+Last session: 2026-04-11T10:26:05.433Z
+Stopped at: Ready for Phase 07 planning
+Resume file: None
