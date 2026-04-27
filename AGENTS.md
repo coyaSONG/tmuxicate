@@ -1,4 +1,3 @@
-<!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
 **tmuxicate**
@@ -14,9 +13,7 @@
 - **Compatibility**: Preserve the existing mailbox protocol and multi-vendor adapter model — current Codex/Claude/generic flows must not be broken by coordinator features
 - **Operational model**: Human operator remains the final escalation point — coordinator automation should surface blocked or risky situations instead of hiding them
 - **Quality**: New orchestration flows need direct test coverage in the currently under-tested session/runtime areas — otherwise automation will amplify regressions
-<!-- GSD:project-end -->
 
-<!-- GSD:stack-start source:codebase/STACK.md -->
 ## Technology Stack
 
 ## Languages
@@ -71,9 +68,7 @@
 - `golangci-lint`, `gofumpt`, and `goimports` are expected by `Makefile` but their versions are not pinned in-repo.
 - No hosted deployment target is defined.
 - Runtime target is a local or remote POSIX-like machine with filesystem access, `tmux`, configured agent CLIs, and permission to create the session state tree under `.tmuxicate/` or another configured state dir.
-<!-- GSD:stack-end -->
 
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
 ## Naming Patterns
@@ -140,9 +135,7 @@
 - YAML is the persistence format for durable mailbox/config records. Follow `yaml.Marshal` and `yaml.Unmarshal` usage in `internal/config/loader.go` and `internal/mailbox/store.go`.
 - Fake implementations are preferred over mocking frameworks for boundary tests. `internal/tmux/fake.go` is the reference fake.
 - No `TODO`, `FIXME`, `HACK`, or `XXX` markers were detected under `cmd/` or `internal/`; new work should either be implemented or filed externally instead of leaving inline debt markers.
-<!-- GSD:conventions-end -->
 
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
 ## Pattern Overview
@@ -224,32 +217,7 @@
 - Validation happens at boundaries: config in `internal/config/loader.go`, protocol schema in `internal/protocol/validation.go`, and filesystem invariants in `internal/mailbox/store.go`.
 - Runtime failures in the daemon are logged to `logs/serve.jsonl` and usually converted into retryable receipt metadata rather than crashing the process.
 ## Cross-Cutting Concerns
-<!-- GSD:architecture-end -->
 
-<!-- GSD:skills-start source:skills/ -->
 ## Project Skills
 
 No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, or `.github/skills/` with a `SKILL.md` index file.
-<!-- GSD:skills-end -->
-
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd-debug` for investigation and bug fixing
-- `/gsd-execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
-
-
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
