@@ -61,7 +61,7 @@ func TargetHeartbeat(stateDir, targetName string, availability mailbox.TargetAva
 	if err != nil {
 		return nil, err
 	}
-	recorded, err := mailbox.RecordTargetHeartbeat(stateDir, target, availability, summary, "heartbeat", capabilities)
+	recorded, err := mailbox.RecordTargetHeartbeat(stateDir, &target, availability, summary, "heartbeat", capabilities)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func DisableTarget(stateDir, targetName, reason string) (*TargetStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	recorded, err := mailbox.UpsertTargetState(stateDir, target, func(state *mailbox.TargetState) error {
+	recorded, err := mailbox.UpsertTargetState(stateDir, &target, func(state *mailbox.TargetState) error {
 		state.Availability = mailbox.TargetAvailabilityDisabled
 		state.Summary = "target disabled by operator"
 		state.Source = "operator"
@@ -87,7 +87,7 @@ func DisableTarget(stateDir, targetName, reason string) (*TargetStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := mailbox.RecordTargetHeartbeat(stateDir, target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
+	if _, err := mailbox.RecordTargetHeartbeat(stateDir, &target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
 		return nil, err
 	}
 	report, err := buildTargetStatus(cfg, targetCfg, recorded)
@@ -102,7 +102,7 @@ func EnableTarget(stateDir, targetName, reason string) (*TargetStatus, int, erro
 	if err != nil {
 		return nil, 0, err
 	}
-	recorded, err := mailbox.UpsertTargetState(stateDir, target, func(state *mailbox.TargetState) error {
+	recorded, err := mailbox.UpsertTargetState(stateDir, &target, func(state *mailbox.TargetState) error {
 		state.Availability = mailbox.TargetAvailabilityReady
 		state.Summary = "target enabled by operator"
 		state.Source = "operator"
@@ -115,7 +115,7 @@ func EnableTarget(stateDir, targetName, reason string) (*TargetStatus, int, erro
 	if err != nil {
 		return nil, 0, err
 	}
-	if _, err := mailbox.RecordTargetHeartbeat(stateDir, target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
+	if _, err := mailbox.RecordTargetHeartbeat(stateDir, &target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
 		return nil, 0, err
 	}
 	redispatched, err := dispatchPendingForTarget(stateDir, cfg, targetCfg)
@@ -143,7 +143,7 @@ func buildTargetStatus(cfg *config.ResolvedConfig, targetCfg config.ExecutionTar
 		PaneBacked:   targetCfg.PaneBacked,
 	}
 	if recorded == nil {
-		recorded = mailbox.DefaultTargetState(target)
+		recorded = mailbox.DefaultTargetState(&target)
 	}
 	availability, summary := effectiveTargetAvailability(targetCfg, recorded)
 	dispatches, err := mailbox.ListTargetDispatches(cfg.Session.StateDir, targetCfg.Name)
@@ -352,7 +352,7 @@ func dispatchNonLocalTask(cfg *config.ResolvedConfig, targetCfg config.Execution
 		if writeErr := mailbox.WriteTargetDispatch(cfg.Session.StateDir, record); writeErr != nil {
 			return writeErr
 		}
-		_, stateErr := mailbox.UpsertTargetState(cfg.Session.StateDir, target, func(state *mailbox.TargetState) error {
+		_, stateErr := mailbox.UpsertTargetState(cfg.Session.StateDir, &target, func(state *mailbox.TargetState) error {
 			state.Availability = mailbox.TargetAvailabilityDegraded
 			state.Summary = "last dispatch failed"
 			state.Source = "dispatch"
@@ -375,7 +375,7 @@ func dispatchNonLocalTask(cfg *config.ResolvedConfig, targetCfg config.Execution
 	if err := mailbox.WriteTargetDispatch(cfg.Session.StateDir, record); err != nil {
 		return err
 	}
-	_, err = mailbox.UpsertTargetState(cfg.Session.StateDir, target, func(state *mailbox.TargetState) error {
+	_, err = mailbox.UpsertTargetState(cfg.Session.StateDir, &target, func(state *mailbox.TargetState) error {
 		state.Availability = mailbox.TargetAvailabilityReady
 		state.Summary = "last dispatch succeeded"
 		state.Source = "dispatch"
@@ -399,7 +399,7 @@ func targetAvailabilityForRouting(stateDir string, targetCfg config.ExecutionTar
 		if !os.IsNotExist(err) {
 			return mailbox.TargetAvailabilityUnknown, "", err
 		}
-		state = mailbox.DefaultTargetState(target)
+		state = mailbox.DefaultTargetState(&target)
 	}
 	availability, summary := effectiveTargetAvailability(targetCfg, state)
 	return availability, summary, nil

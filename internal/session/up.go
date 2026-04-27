@@ -132,7 +132,7 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 			Capabilities: append([]string(nil), targetCfg.Capabilities...),
 			PaneBacked:   targetCfg.PaneBacked,
 		}
-		if _, err := mailbox.UpsertTargetState(cfg.Session.StateDir, target, nil); err != nil {
+		if _, err := mailbox.UpsertTargetState(cfg.Session.StateDir, &target, nil); err != nil {
 			return fmt.Errorf("initialize target state for %s: %w", target.Name, err)
 		}
 	}

@@ -75,3 +75,24 @@
 **What's next:** Define the next milestone around richer authenticated transport, multi-coordinator topology, and cross-run operator control on top of the shipped target runtime model.
 
 ---
+
+## v1.3 Runtime Trust & Honest Controls (Active: 2026-04-27)
+
+**Goal:** Harden the v1.2 target/runtime foundation before expanding remote transport, worktree isolation, or multi-coordinator topology.
+
+**Phases planned:** 13-15 (6 plans total)
+
+**Planned outcomes:**
+- Target health and dispatch artifacts use mailbox-grade durability under concurrent updates.
+- Non-pane dispatch records durable intent before execution and supports idempotent recovery for each target/message pair.
+- Delivery policy settings such as manual mode, auto-notify, readiness checks, retry ceilings, and timeouts are enforced or surfaced clearly.
+- Daemon lifecycle is owned across `up`, `serve`, `status`, and `down`, including stale PID and duplicate-daemon handling.
+- Local artifact permissions, env validation, dispatch output handling, README, and command UX align with the reliability-first product contract.
+
+**Plan:** `.planning/milestones/v1.3-ROADMAP.md`
+
+**Requirements:** `.planning/milestones/v1.3-REQUIREMENTS.md`
+
+**What's next:** Execute Phase 13 Plan 02: Intent-First Dispatch Recovery.
+
+---

@@ -82,7 +82,7 @@ func TestRouteChildTaskSkipsDisabledTarget(t *testing.T) {
 		Capabilities: []string{"sandbox", "ephemeral"},
 		PaneBacked:   false,
 	}
-	if _, err := mailbox.RecordTargetHeartbeat(cfg.Session.StateDir, target, mailbox.TargetAvailabilityDisabled, "operator disabled sandbox", "operator", nil); err != nil {
+	if _, err := mailbox.RecordTargetHeartbeat(cfg.Session.StateDir, &target, mailbox.TargetAvailabilityDisabled, "operator disabled sandbox", "operator", nil); err != nil {
 		t.Fatalf("disable sandbox target: %v", err)
 	}
 

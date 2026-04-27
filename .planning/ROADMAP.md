@@ -5,19 +5,22 @@
 - ✅ **v1.0 Coordinator Automation** — Phases 1-5 shipped 2026-04-11. Archive: `.planning/milestones/v1.0-ROADMAP.md`
 - ✅ **v1.1 Adaptive Coordination** — Phases 6-9 shipped 2026-04-11. Archive: `.planning/milestones/v1.1-ROADMAP.md`
 - ✅ **v1.2 Remote Execution Foundations** — Phases 10-12 shipped 2026-04-11. Archive: `.planning/milestones/v1.2-ROADMAP.md`
+- 🟡 **v1.3 Runtime Trust & Honest Controls** — Phases 13-15 active. Plan: `.planning/milestones/v1.3-ROADMAP.md`
 
 ## Current Status
 
-There is no active milestone. `tmuxicate` has shipped:
+`v1.3 Runtime Trust & Honest Controls` is the active milestone. It focuses on hardening the target/runtime foundations before broader remote transport, worktree automation, or multi-coordinator topology:
 
-- durable coordinator run decomposition, routing, review handoff, blocker handling, and run summaries from `v1.0`
-- adaptive routing signals, bounded partial replans, execution-target placement, and filtered run timelines from `v1.1`
-- concrete non-pane target dispatch, durable target health, and explicit operator target control from `v1.2`
+- mailbox-grade target state and dispatch durability
+- intent-first, idempotent non-pane dispatch recovery
+- truthful delivery policy behavior for manual mode, notification disablement, readiness checks, retry ceilings, and timeout visibility
+- owned daemon lifecycle across `up`, `serve`, `status`, and `down`
+- safer local artifacts plus documentation and command UX alignment
 
 ## Next Step
 
-Start the next milestone with:
+Execute Phase 13 Plan 02 with:
 
 ```bash
-/gsd-new-milestone
+/gsd-execute-phase 13
 ```

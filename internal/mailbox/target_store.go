@@ -64,25 +64,28 @@ type TargetDispatchRecord struct {
 	DispatchedAt string               `json:"dispatched_at,omitempty"`
 }
 
-func DefaultTargetState(target protocol.ExecutionTarget) *TargetState {
+func DefaultTargetState(target *protocol.ExecutionTarget) *TargetState {
 	availability := TargetAvailabilityUnknown
 	summary := "target has not reported health yet"
-	if target.Kind == "local" && target.PaneBacked {
-		availability = TargetAvailabilityReady
-		summary = "implicit local pane-backed target"
-	}
-
-	return &TargetState{
+	state := &TargetState{
 		Schema:       "tmuxicate/target-health/v1",
-		Name:         target.Name,
-		Kind:         target.Kind,
-		PaneBacked:   target.PaneBacked,
-		Capabilities: append([]string(nil), target.Capabilities...),
 		Availability: availability,
 		Summary:      summary,
 		Source:       "default",
 		UpdatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 	}
+	if target == nil {
+		return state
+	}
+	if target.Kind == "local" && target.PaneBacked {
+		state.Availability = TargetAvailabilityReady
+		state.Summary = "implicit local pane-backed target"
+	}
+	state.Name = target.Name
+	state.Kind = target.Kind
+	state.PaneBacked = target.PaneBacked
+	state.Capabilities = append([]string(nil), target.Capabilities...)
+	return state
 }
 
 func (a TargetAvailability) BlocksRouting() bool {
@@ -106,10 +109,19 @@ func ReadTargetState(stateDir, target string) (*TargetState, error) {
 	return &state, nil
 }
 
-func UpsertTargetState(stateDir string, target protocol.ExecutionTarget, mutate func(*TargetState) error) (*TargetState, error) {
+func UpsertTargetState(stateDir string, target *protocol.ExecutionTarget, mutate func(*TargetState) error) (*TargetState, error) {
+	if target == nil {
+		return nil, errors.New("target is required")
+	}
 	if strings.TrimSpace(target.Name) == "" {
 		return nil, errors.New("target name is required")
 	}
+
+	unlock, err := lockTarget(stateDir, target.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = unlock() }()
 
 	state, err := ReadTargetState(stateDir, target.Name)
 	if err != nil {
@@ -141,7 +153,7 @@ func UpsertTargetState(stateDir string, target protocol.ExecutionTarget, mutate 
 	return state, nil
 }
 
-func RecordTargetHeartbeat(stateDir string, target protocol.ExecutionTarget, availability TargetAvailability, summary, source string, capabilities []string) (*TargetState, error) {
+func RecordTargetHeartbeat(stateDir string, target *protocol.ExecutionTarget, availability TargetAvailability, summary, source string, capabilities []string) (*TargetState, error) {
 	state, err := UpsertTargetState(stateDir, target, func(state *TargetState) error {
 		state.Availability = availability
 		state.Summary = strings.TrimSpace(summary)
@@ -183,6 +195,13 @@ func WriteTargetDispatch(stateDir string, record *TargetDispatchRecord) error {
 	if strings.TrimSpace(record.MessageID) == "" {
 		return errors.New("message_id is required")
 	}
+
+	unlock, err := lockTarget(stateDir, record.TargetName)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unlock() }()
+
 	if err := os.MkdirAll(TargetDispatchesDir(stateDir, record.TargetName), 0o755); err != nil {
 		return fmt.Errorf("create target dispatch dir: %w", err)
 	}
@@ -190,7 +209,7 @@ func WriteTargetDispatch(stateDir string, record *TargetDispatchRecord) error {
 	if err != nil {
 		return fmt.Errorf("marshal target dispatch: %w", err)
 	}
-	if err := os.WriteFile(TargetDispatchPath(stateDir, record.TargetName, protocol.MessageID(record.MessageID)), append(data, '\n'), 0o644); err != nil {
+	if err := writeFileAtomically(TargetDispatchPath(stateDir, record.TargetName, protocol.MessageID(record.MessageID)), append(data, '\n'), 0o644); err != nil {
 		return fmt.Errorf("write target dispatch: %w", err)
 	}
 	return appendJSONLine(TargetDispatchLogPath(stateDir, record.TargetName), record)
@@ -236,7 +255,7 @@ func writeTargetState(stateDir string, state *TargetState) error {
 	if err != nil {
 		return fmt.Errorf("marshal target state: %w", err)
 	}
-	if err := os.WriteFile(TargetStatePath(stateDir, state.Name), append(data, '\n'), 0o644); err != nil {
+	if err := writeFileAtomically(TargetStatePath(stateDir, state.Name), append(data, '\n'), 0o644); err != nil {
 		return fmt.Errorf("write target state: %w", err)
 	}
 	return nil
@@ -258,5 +277,19 @@ func appendJSONLine(path string, value any) error {
 	if _, err := f.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("append jsonl value: %w", err)
 	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("sync jsonl path: %w", err)
+	}
+	if err := syncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync jsonl dir: %w", err)
+	}
 	return nil
+}
+
+func lockTarget(stateDir, target string) (func() error, error) {
+	path := TargetLockPath(stateDir, target)
+	if err := ensureDir(filepath.Dir(path)); err != nil {
+		return nil, err
+	}
+	return flockPath(path)
 }

@@ -88,6 +88,14 @@ func ReceiptLockPath(stateDir, agent string, msgID protocol.MessageID) string {
 	return filepath.Join(ReceiptLocksDir(stateDir, agent), fmt.Sprintf("%s.lock", msgID))
 }
 
+func TargetLocksDir(stateDir string) string {
+	return filepath.Join(LocksDir(stateDir), "targets")
+}
+
+func TargetLockPath(stateDir, target string) string {
+	return filepath.Join(TargetLocksDir(stateDir), fmt.Sprintf("%s.lock", target))
+}
+
 func ReceiptFileName(receipt *protocol.Receipt) string {
 	return fmt.Sprintf("%010d-%s.yaml", receipt.Seq, receipt.MessageID)
 }

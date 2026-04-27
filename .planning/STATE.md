@@ -1,45 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Remote Execution Foundations
-current_phase: 12
-current_phase_name: operator-target-control
-current_plan: Complete
-status: completed
-stopped_at: Milestone v1.2 Remote Execution Foundations complete
-last_updated: "2026-04-11T13:27:52Z"
-last_activity: 2026-04-11
+milestone: v1.3
+milestone_name: Runtime Trust & Honest Controls
+current_phase: 13
+current_phase_name: target-persistence-dispatch-safety
+current_plan: 13-02-intent-first-dispatch-recovery
+status: active
+stopped_at: Milestone v1.3 Runtime Trust & Honest Controls defined
+last_updated: "2026-04-27T04:55:27Z"
+last_activity: 2026-04-27
 progress:
   total_phases: 3
-  completed_phases: 3
+  completed_phases: 0
   total_plans: 6
-  completed_plans: 6
-  percent: 100
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-11)
+See: .planning/PROJECT.md (updated 2026-04-27)
 
 **Core value:** A human can coordinate multiple terminal agents through a reliable, observable workflow where the coordinator keeps work moving without hiding what happened.
-**Current focus:** Planning the next milestone after shipping v1.2 Remote Execution Foundations
+**Current focus:** v1.3 Runtime Trust & Honest Controls — harden target persistence, delivery policy, daemon lifecycle, artifact safety, and operator-facing docs before broader remote/worktree expansion.
 
 ## Current Position
 
-Phase: 12 (operator-target-control) — COMPLETE
-Current Phase: 12
-Current Phase Name: operator-target-control
+Phase: 13 (target-persistence-dispatch-safety) — PLANNED
+Current Phase: 13
+Current Phase Name: target-persistence-dispatch-safety
 Plan: 2 of 2
-Current Plan: Complete
+Current Plan: 13-02-intent-first-dispatch-recovery
 Total Plans in Phase: 2
 Total Phases: 3
-Status: Milestone v1.2 Remote Execution Foundations complete
-Last activity: 2026-04-11
-Last Activity Description: v1.2 Remote Execution Foundations milestone completed and archived
+Status: Milestone v1.3 Runtime Trust & Honest Controls active
+Last activity: 2026-04-27
+Last Activity Description: Phase 13 Plan 01 completed target store durability hardening with race-tested mailbox coverage
 
-Progress: [██████████] 100%
+Progress: [██--------] 17%
 
 ## Performance Metrics
 
@@ -134,19 +134,22 @@ Recent decisions affecting current work:
 - [Phase 11]: Remote lifecycle parity stays on the existing mailbox/task/state event contract; target-aware routing evidence is additive.
 - [Phase 12]: Operator target control lives in a dedicated `tmuxicate target` command family with durable enable/disable state.
 - [Phase 12]: Re-enabling a target redispatches unread pending work only, keeping recovery bounded and inspectable.
+- [Phase 13]: Target state and dispatch records now use target-scoped locks plus atomic JSON writes so concurrent target operations preserve valid artifacts.
 
 ### Pending Todos
 
-None yet.
+- Execute Phase 13 Plan 02: intent-first dispatch recovery.
+- Preserve pre-existing code WIP in `cmd/tmuxicate/main.go`, `cmd/tmuxicate/main_test.go`, `internal/mailbox/target_store.go`, `internal/session/target.go`, `internal/session/target_test.go`, and `internal/session/up.go` unless explicitly asked otherwise.
 
 ### Blockers/Concerns
 
-- Richer authenticated remote transport and worker bootstrap boundaries are still undefined in-product
-- Remote lifecycle parity still depends on remote workers using the canonical CLI/state event contract
-- Multi-coordinator topology and cross-run rebalancing remain intentionally deferred
+- Target state and dispatch persistence currently need stronger lock/atomic-write semantics before remote execution expands further.
+- Delivery policy config exists beyond what runtime currently enforces, so operator expectations can drift from actual behavior.
+- Daemon lifecycle ownership remains incomplete until `down` can stop the daemon and `up`/`serve` can prevent stale or duplicate daemons.
+- Remote authenticated transport, worktree isolation, cross-run attention, and multi-coordinator topology remain intentionally deferred until v1.3 trust work lands.
 
 ## Session Continuity
 
-Last session: 2026-04-11T13:27:52Z
-Stopped at: Milestone v1.2 Remote Execution Foundations complete
-Resume file: .planning/milestones/v1.2-MILESTONE-AUDIT.md
+Last session: 2026-04-27T04:55:27Z
+Stopped at: Phase 13 Plan 01 complete; Plan 02 not started
+Resume file: .planning/milestones/v1.3-phases/13-target-persistence-dispatch-safety/13-02-PLAN.md

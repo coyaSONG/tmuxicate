@@ -13,7 +13,9 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 - Shipped `v1.0 Coordinator Automation` on 2026-04-11.
 - Shipped `v1.1 Adaptive Coordination` on 2026-04-11.
 - Shipped `v1.2 Remote Execution Foundations` on 2026-04-11.
+- Started `v1.3 Runtime Trust & Honest Controls` planning on 2026-04-27.
 - The latest shipped product supports operator-configured non-pane target dispatch, durable target heartbeat and availability state, explicit enable/disable and recovery flows, and target-aware routing evidence on top of the existing adaptive run graph and timeline model.
+- The active milestone hardens target persistence, dispatch recovery, delivery policy, daemon lifecycle, artifact safety, and docs/UX alignment before expanding remote transport, worktree isolation, or multi-coordinator topology.
 - The core architecture remains the same: `cmd/tmuxicate/main.go` wires the CLI, `internal/session/` owns user-facing workflows, `internal/mailbox/` persists durable state, `internal/runtime/daemon.go` handles local pane notifications, and `internal/adapter/` plus `internal/tmux/` isolate integration boundaries.
 - The major remaining product pressure is now “how far can remote execution and multi-team topology expand without weakening inspectability or operational trust?”
 
@@ -43,11 +45,11 @@ A human can coordinate multiple terminal agents through a reliable, observable w
 
 ### Active
 
-- [ ] Coordinator can support richer authenticated remote transport adapters without replacing the mailbox-backed coordination model
-- [ ] Coordinator can bootstrap or register remote workers with less manual shared-state setup while keeping operator control explicit
-- [ ] Coordinator can manage nested teams or multiple coordinators within one durable workflow graph
-- [ ] Operators can compare, rebalance, and inspect work across multiple coordinator runs or teams
-- [ ] Coordinator can evolve adaptive signals into richer inspectable recommendations or auto-tuning without hiding control boundaries
+- [x] Target health and dispatch artifacts are persisted with mailbox-grade durability under concurrent updates
+- [ ] Non-pane dispatch recovery is intent-first and idempotent for each target/message pair
+- [ ] Runtime notification behavior honors manual delivery, auto-notify, readiness, retry, and timeout policy explicitly
+- [ ] Session startup, serving, status, and shutdown own daemon lifecycle and surface stale or duplicate daemon states
+- [ ] Sensitive local artifacts and operator-facing docs/UX align with the reliability-first product contract
 
 ### Out of Scope
 
@@ -64,9 +66,11 @@ The codebase is now a brownfield Go CLI with three shipped coordinator milestone
 
 ## Next Milestone Goals
 
-- Expand beyond command-based shared-state dispatch into richer authenticated remote transport and worker bootstrap
-- Support multi-team or multi-coordinator topology without weakening run-graph inspectability
-- Build cross-run operator insight and rebalancing on top of the shipped target health and timeline surfaces
+- Harden target state and dispatch persistence before expanding non-pane execution capabilities
+- Make delivery configuration truthful by wiring manual mode, notification disablement, readiness checks, retry ceilings, and timeout visibility into runtime behavior
+- Own daemon lifecycle across `up`, `serve`, `status`, and `down` so operators can recover from stale or duplicate runtime processes
+- Tighten sensitive local artifact handling and update README/CLI UX to match shipped `run`, `target`, and picker behavior
+- Keep authenticated remote transport, worktree isolation, cross-run attention, and multi-coordinator topology deferred until the trust foundation is stronger
 
 ## Constraints
 
@@ -112,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 3. Archive milestone-scoped roadmap and requirements context
 
 ---
-*Last updated: 2026-04-11 after shipping v1.2 Remote Execution Foundations*
+*Last updated: 2026-04-27 after defining v1.3 Runtime Trust & Honest Controls*
