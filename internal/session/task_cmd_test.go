@@ -168,7 +168,7 @@ func TestTaskBlockEscalatesAtRerouteCeiling(t *testing.T) {
 		t.Parallel()
 
 		fixture := seedBlockerPolicyFixture(t, 1)
-		seedExistingBlockerCase(t, fixture, protocol.BlockerCase{
+		seedExistingBlockerCase(t, fixture, &protocol.BlockerCase{
 			RunID:            fixture.run.RunID,
 			SourceTaskID:     fixture.sourceTask.TaskID,
 			SourceMessageID:  fixture.sourceTask.MessageID,
@@ -265,7 +265,7 @@ func TestTaskBlockClarificationDoesNotConsumeRerouteBudget(t *testing.T) {
 	t.Parallel()
 
 	fixture := seedBlockerPolicyFixture(t, 2)
-	seedExistingBlockerCase(t, fixture, protocol.BlockerCase{
+	seedExistingBlockerCase(t, fixture, &protocol.BlockerCase{
 		RunID:            fixture.run.RunID,
 		SourceTaskID:     fixture.sourceTask.TaskID,
 		SourceMessageID:  fixture.sourceTask.MessageID,
@@ -533,7 +533,7 @@ func seedReviewHandoffFixture(t *testing.T) reviewHandoffFixture {
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route implementation work into review handoff flow",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -542,7 +542,7 @@ func seedReviewHandoffFixture(t *testing.T) reviewHandoffFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	sourceTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	sourceTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -578,7 +578,7 @@ func seedBlockerPolicyFixture(t *testing.T, maxReroutes int) blockerPolicyFixtur
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Exercise blocker policy for coordinator-run child tasks",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -587,7 +587,7 @@ func seedBlockerPolicyFixture(t *testing.T, maxReroutes int) blockerPolicyFixtur
 		t.Fatalf("run: %v", err)
 	}
 
-	sourceTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	sourceTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -609,7 +609,7 @@ func seedBlockerPolicyFixture(t *testing.T, maxReroutes int) blockerPolicyFixtur
 	}
 }
 
-func seedExistingBlockerCase(t *testing.T, fixture blockerPolicyFixture, caseDoc protocol.BlockerCase) {
+func seedExistingBlockerCase(t *testing.T, fixture blockerPolicyFixture, caseDoc *protocol.BlockerCase) {
 	t.Helper()
 
 	now := time.Now().UTC()
@@ -620,7 +620,7 @@ func seedExistingBlockerCase(t *testing.T, fixture blockerPolicyFixture, caseDoc
 		caseDoc.UpdatedAt = now
 	}
 
-	if err := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir).CreateBlockerCase(&caseDoc); err != nil {
+	if err := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir).CreateBlockerCase(caseDoc); err != nil {
 		t.Fatalf("create blocker case: %v", err)
 	}
 }

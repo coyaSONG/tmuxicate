@@ -107,7 +107,7 @@ func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Rebuild routed task evidence from disk",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -116,7 +116,7 @@ func TestRunShowIncludesRoutingDecisionEvidence(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -170,7 +170,7 @@ func TestRunShowIncludesExecutionTargetCapabilitiesAndPlacementReason(t *testing
 	cfg := testExecutionTargetRouteConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Render durable execution target placement from task YAML",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -179,7 +179,7 @@ func TestRunShowIncludesExecutionTargetCapabilitiesAndPlacementReason(t *testing
 		t.Fatalf("run: %v", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+	task, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend-high",
 		Goal:           "Execute implementation work in sandbox",
@@ -215,7 +215,7 @@ func TestFormatRunGraphIncludesAdaptiveRoutingExplanation(t *testing.T) {
 
 	cfg := testAdaptiveRoutingConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Render adaptive routing explanation from durable task artifacts",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -247,7 +247,7 @@ func TestFormatRunGraphIncludesAdaptiveRoutingExplanation(t *testing.T) {
 		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
 	}
 
-	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -380,7 +380,7 @@ func TestFormatRunGraphIncludesTimelineBetweenSummaryAndTaskDetails(t *testing.T
 		t.Fatalf("expected task detail blocks in timeline-aware output\noutput:\n%s", output)
 	}
 
-	if !(summaryIndex < timelineIndex && timelineIndex < firstTaskIndex) {
+	if summaryIndex >= timelineIndex || timelineIndex >= firstTaskIndex {
 		t.Fatalf("expected summary -> timeline -> task ordering\noutput:\n%s", output)
 	}
 }
@@ -683,7 +683,7 @@ func seedRunGraphFixture(t *testing.T) runGraphFixture {
 	cfg := testRunWorkflowConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Rebuild coordinator state from durable artifacts",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -692,7 +692,7 @@ func seedRunGraphFixture(t *testing.T) runGraphFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	backendTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	backendTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend",
 		Goal:           "Implement the rebuild reader",
@@ -702,7 +702,7 @@ func seedRunGraphFixture(t *testing.T) runGraphFixture {
 		t.Fatalf("add backend task: %v", err)
 	}
 
-	reviewerTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	reviewerTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "reviewer",
 		Goal:           "Review rebuilt task lineage",
@@ -735,7 +735,7 @@ func seedPartialReplanLineageFixture(t *testing.T) partialReplanLineageFixture {
 	store := mailbox.NewStore(fixture.cfg.Session.StateDir)
 	coordinatorStore := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir)
 
-	replacementTask, err := AddChildTask(fixture.cfg, store, ChildTaskRequest{
+	replacementTask, err := AddChildTask(fixture.cfg, store, &ChildTaskRequest{
 		ParentRunID:    fixture.run.RunID,
 		Owner:          "backend-low",
 		Goal:           "Continue the blocked source task through a bounded replacement",

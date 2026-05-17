@@ -57,20 +57,22 @@ func BuildAdaptiveRoutingPreferences(cfg *config.ResolvedConfig, stateDir string
 		}
 
 		tasksByID := make(map[protocol.TaskID]RunGraphTask, len(graph.Tasks))
-		for _, task := range graph.Tasks {
-			tasksByID[task.Task.TaskID] = task
+		for i := range graph.Tasks {
+			task := &graph.Tasks[i]
+			tasksByID[task.Task.TaskID] = *task
 		}
 
 		summary := BuildRunSummary(graph)
 		if summary == nil {
 			continue
 		}
-		for _, item := range summary.Items {
+		for i := range summary.Items {
+			item := &summary.Items[i]
 			sourceTask, ok := tasksByID[item.SourceTaskID]
 			if !ok {
 				return nil, fmt.Errorf("run %s summary references missing source task %s", run.RunID, item.SourceTaskID)
 			}
-			if !hasAdaptiveRoutingSourceTaskMetadata(sourceTask.Task) {
+			if !hasAdaptiveRoutingSourceTaskMetadata(&sourceTask.Task) {
 				continue
 			}
 
@@ -122,7 +124,7 @@ func BuildAdaptiveRoutingPreferences(cfg *config.ResolvedConfig, stateDir string
 	for _, key := range keys {
 		row := rows[key]
 		sort.SliceStable(row.Evidence, func(i, j int) bool {
-			return compareAdaptiveEvidence(row.Evidence[i], row.Evidence[j]) < 0
+			return compareAdaptiveEvidence(&row.Evidence[i], &row.Evidence[j]) < 0
 		})
 		row.TotalScore = row.HistoricalScore + row.ManualWeight
 		preferenceSet.Preferences = append(preferenceSet.Preferences, *row)
@@ -189,7 +191,7 @@ func loadCompletedAdaptiveRuns(stateDir string, coordinator protocol.AgentName) 
 	return runs, nil
 }
 
-func adaptiveHistoricalSignals(cfg *config.ResolvedConfig, runID protocol.RunID, item RunSummaryItem, sourceMessageID protocol.MessageID) (int, []protocol.AdaptiveRoutingEvidenceRef) {
+func adaptiveHistoricalSignals(cfg *config.ResolvedConfig, runID protocol.RunID, item *RunSummaryItem, sourceMessageID protocol.MessageID) (int, []protocol.AdaptiveRoutingEvidenceRef) {
 	evidence := make([]protocol.AdaptiveRoutingEvidenceRef, 0, 2)
 	score := 0
 
@@ -260,7 +262,7 @@ func adaptivePreferenceKey(taskClass protocol.TaskClass, normalizedDomains []str
 	return fmt.Sprintf("%s|%s|%s", taskClass, strings.Join(normalizedDomains, ","), preferredOwner)
 }
 
-func hasAdaptiveRoutingSourceTaskMetadata(task protocol.ChildTask) bool {
+func hasAdaptiveRoutingSourceTaskMetadata(task *protocol.ChildTask) bool {
 	return task.TaskClass != "" && len(task.NormalizedDomains) > 0 && strings.TrimSpace(string(task.Owner)) != ""
 }
 
@@ -292,7 +294,7 @@ func matchAdaptivePreference(preferenceSet *protocol.AdaptiveRoutingPreferenceSe
 	return nil
 }
 
-func compareAdaptiveEvidence(left, right protocol.AdaptiveRoutingEvidenceRef) int {
+func compareAdaptiveEvidence(left, right *protocol.AdaptiveRoutingEvidenceRef) int {
 	if diff := strings.Compare(string(left.RunID), string(right.RunID)); diff != 0 {
 		return diff
 	}

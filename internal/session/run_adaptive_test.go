@@ -164,7 +164,7 @@ type adaptiveCompletedRunOptions struct {
 func seedAdaptiveCompletedRun(t *testing.T, cfg *config.ResolvedConfig, store *mailbox.Store, opts adaptiveCompletedRunOptions) (*protocol.CoordinatorRun, *protocol.ChildTask) {
 	t.Helper()
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        opts.goal,
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -173,7 +173,7 @@ func seedAdaptiveCompletedRun(t *testing.T, cfg *config.ResolvedConfig, store *m
 		t.Fatalf("run: %v", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+	task, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:       run.RunID,
 		Owner:             "backend-steady",
 		Goal:              opts.taskGoal,

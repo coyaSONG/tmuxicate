@@ -71,7 +71,8 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		Tasks: make([]RunGraphTask, 0, len(tasks)),
 	}
 	taskByID := make(map[protocol.TaskID]*RunGraphTask, len(tasks))
-	for _, task := range tasks {
+	for i := range tasks {
+		task := &tasks[i]
 		if task.ParentRunID != run.RunID {
 			return nil, coordinatorArtifactMismatch("task %s belongs to run %s, not %s", task.TaskID, task.ParentRunID, run.RunID)
 		}
@@ -98,7 +99,7 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		}
 
 		node := RunGraphTask{
-			Task:          task,
+			Task:          *task,
 			ReceiptState:  receiptState,
 			DeclaredState: declaredState,
 		}
@@ -106,7 +107,8 @@ func LoadRunGraph(stateDir string, runID protocol.RunID) (*RunGraph, error) {
 		taskByID[task.TaskID] = &graph.Tasks[len(graph.Tasks)-1]
 	}
 
-	for _, node := range graph.Tasks {
+	for i := range graph.Tasks {
+		node := &graph.Tasks[i]
 		for _, dependency := range node.Task.DependsOn {
 			if _, ok := taskByID[dependency]; !ok {
 				return nil, coordinatorArtifactMismatch("task %s depends on missing task %s", node.Task.TaskID, dependency)
@@ -326,7 +328,8 @@ func FormatRunGraphView(stateDir string, graph *RunGraph, opts RunGraphFormatOpt
 		if len(filtered) == 0 {
 			builder.WriteString("- no timeline events matched\n")
 		} else {
-			for _, event := range filtered {
+			for i := range filtered {
+				event := &filtered[i]
 				fmt.Fprintf(&builder, "- %s | kind=%s%s\n", event.Timestamp.Format(time.RFC3339), event.Kind, formatTimelineEventDetails(event))
 			}
 		}
@@ -334,7 +337,8 @@ func FormatRunGraphView(stateDir string, graph *RunGraph, opts RunGraphFormatOpt
 			return builder.String(), nil
 		}
 	}
-	for _, task := range graph.Tasks {
+	for i := range graph.Tasks {
+		task := &graph.Tasks[i]
 		fmt.Fprintf(&builder, "\nTask: %s\n", task.Task.TaskID)
 		fmt.Fprintf(&builder, "Owner: %s\n", task.Task.Owner)
 		if task.Task.Placement != nil {
@@ -346,7 +350,7 @@ func FormatRunGraphView(stateDir string, graph *RunGraph, opts RunGraphFormatOpt
 		if task.Task.TaskClass != "" {
 			fmt.Fprintf(&builder, "Task Class: %s\n", task.Task.TaskClass)
 		}
-		if domains := formatTaskDomains(task.Task); domains != "" {
+		if domains := formatTaskDomains(&task.Task); domains != "" {
 			fmt.Fprintf(&builder, "Domains: %s\n", domains)
 		}
 		if strings.TrimSpace(task.Task.DuplicateKey) != "" {
@@ -467,7 +471,7 @@ func formatTimelineFilters(filter RunTimelineFilter) string {
 	return strings.Join(parts, " ")
 }
 
-func formatTimelineEventDetails(event RunTimelineEvent) string {
+func formatTimelineEventDetails(event *RunTimelineEvent) string {
 	parts := make([]string, 0, 7)
 	if event.Owner != "" {
 		parts = append(parts, fmt.Sprintf("owner=%s", event.Owner))
@@ -713,7 +717,7 @@ func normalizeDisplayValue(value string) string {
 	return value
 }
 
-func formatTaskDomains(task protocol.ChildTask) string {
+func formatTaskDomains(task *protocol.ChildTask) string {
 	values := task.NormalizedDomains
 	if len(values) == 0 {
 		values = task.Domains

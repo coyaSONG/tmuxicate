@@ -212,7 +212,7 @@ func seedRunTimelineFixture(t *testing.T) runTimelineFixture {
 	store := mailbox.NewStore(cfg.Session.StateDir)
 	coordinatorStore := mailbox.NewCoordinatorStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Build one strict timeline from durable coordinator artifacts and task events",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -221,7 +221,7 @@ func seedRunTimelineFixture(t *testing.T) runTimelineFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	sourceTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	sourceTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -250,7 +250,7 @@ func seedRunTimelineFixture(t *testing.T) runTimelineFixture {
 		t.Fatalf("review respond: %v", err)
 	}
 
-	waitTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	waitTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend-low",
 		Goal:           "Wait on one durable external dependency",
@@ -266,7 +266,7 @@ func seedRunTimelineFixture(t *testing.T) runTimelineFixture {
 		t.Fatalf("wait task: %v", err)
 	}
 
-	blockTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	blockTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend-low",
 		Goal:           "Block on a missing decision",
@@ -283,7 +283,7 @@ func seedRunTimelineFixture(t *testing.T) runTimelineFixture {
 	}
 
 	blocker := createEscalatedBlockerCase(t, cfg.Session.StateDir, run.RunID, sourceTask, escalatedBlockerOptions{})
-	replacementTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	replacementTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend-low",
 		Goal:           "Continue source work through one bounded replacement task",
@@ -365,8 +365,8 @@ func writeStateEventAt(t *testing.T, stateDir, agent string, event *TaskEvent) {
 }
 
 func timelineHasKind(events []RunTimelineEvent, kind string) bool {
-	for _, event := range events {
-		if event.Kind == kind {
+	for i := range events {
+		if events[i].Kind == kind {
 			return true
 		}
 	}
@@ -377,9 +377,9 @@ func timelineHasKind(events []RunTimelineEvent, kind string) bool {
 func findTimelineEvent(t *testing.T, events []RunTimelineEvent, kind string, taskID protocol.TaskID) RunTimelineEvent {
 	t.Helper()
 
-	for _, event := range events {
-		if event.Kind == kind && event.TaskID == taskID {
-			return event
+	for i := range events {
+		if events[i].Kind == kind && events[i].TaskID == taskID {
+			return events[i]
 		}
 	}
 
@@ -389,7 +389,8 @@ func findTimelineEvent(t *testing.T, events []RunTimelineEvent, kind string, tas
 
 func summarizeTimelineOrder(events []RunTimelineEvent) []string {
 	summary := make([]string, 0, len(events))
-	for _, event := range events {
+	for i := range events {
+		event := &events[i]
 		summary = append(summary, event.Timestamp.Format(time.RFC3339Nano)+"|"+event.Kind+"|"+string(event.TaskID)+"|"+string(event.MessageID)+"|"+string(event.Owner))
 	}
 

@@ -61,10 +61,11 @@ func BuildRunTimeline(stateDir string, graph *RunGraph) (*RunTimeline, error) {
 
 	lookup := make(map[protocol.MessageID]timelineTaskInfo, len(graph.Tasks))
 	tasksByID := make(map[protocol.TaskID]timelineTaskInfo, len(graph.Tasks))
-	for _, task := range graph.Tasks {
+	for i := range graph.Tasks {
+		task := &graph.Tasks[i]
 		info := timelineTaskInfo{
-			task:   task,
-			target: taskExecutionTarget(task.Task),
+			task:   *task,
+			target: taskExecutionTarget(&task.Task),
 		}
 		lookup[task.Task.MessageID] = info
 		tasksByID[task.Task.TaskID] = info
@@ -80,7 +81,8 @@ func BuildRunTimeline(stateDir string, graph *RunGraph) (*RunTimeline, error) {
 		Summary:         fmt.Sprintf("run %s created", graph.Run.RunID),
 	})
 
-	for _, task := range graph.Tasks {
+	for i := range graph.Tasks {
+		task := &graph.Tasks[i]
 		info := tasksByID[task.Task.TaskID]
 		taskState := taskEventState(task.DeclaredState)
 		events = append(events, RunTimelineEvent{
@@ -188,8 +190,8 @@ func BuildRunTimeline(stateDir string, graph *RunGraph) (*RunTimeline, error) {
 			return events[i].Timestamp.Before(events[j].Timestamp)
 		}
 
-		left := timelineSortKey(events[i])
-		right := timelineSortKey(events[j])
+		left := timelineSortKey(&events[i])
+		right := timelineSortKey(&events[j])
 		if left.precedence != right.precedence {
 			return left.precedence < right.precedence
 		}
@@ -223,7 +225,8 @@ func FilterRunTimeline(timeline *RunTimeline, filter RunTimelineFilter) []RunTim
 	state := strings.TrimSpace(filter.State)
 	target := strings.TrimSpace(filter.ExecutionTarget)
 	filtered := make([]RunTimelineEvent, 0, len(timeline.Events))
-	for _, event := range timeline.Events {
+	for i := range timeline.Events {
+		event := &timeline.Events[i]
 		if owner != "" && string(event.Owner) != owner {
 			continue
 		}
@@ -236,7 +239,7 @@ func FilterRunTimeline(timeline *RunTimeline, filter RunTimelineFilter) []RunTim
 		if target != "" && event.ExecutionTarget != target {
 			continue
 		}
-		filtered = append(filtered, event)
+		filtered = append(filtered, *event)
 	}
 
 	return filtered
@@ -329,7 +332,7 @@ func loadAgentTimelineStateEvents(logPath, agent string, lookup map[protocol.Mes
 				ExecutionTarget: info.target,
 				TaskID:          info.task.Task.TaskID,
 				MessageID:       taskEvent.MessageID,
-				Summary:         timelineStateEventSummary(taskEvent),
+				Summary:         timelineStateEventSummary(&taskEvent),
 			})
 		}
 	}
@@ -347,7 +350,7 @@ func taskClassForStateEvent(kind string, defaultClass protocol.TaskClass) protoc
 	return defaultClass
 }
 
-func timelineStateEventSummary(event TaskEvent) string {
+func timelineStateEventSummary(event *TaskEvent) string {
 	switch event.Event {
 	case "task.wait":
 		return normalizeDisplayValue(event.Reason)
@@ -360,7 +363,7 @@ func timelineStateEventSummary(event TaskEvent) string {
 	}
 }
 
-func taskExecutionTarget(task protocol.ChildTask) string {
+func taskExecutionTarget(task *protocol.ChildTask) string {
 	if task.Placement == nil {
 		return timelineImplicitLocalExecutionTarget
 	}
@@ -391,7 +394,7 @@ func taskEventState(state string) string {
 	return value
 }
 
-func timelineSortKey(event RunTimelineEvent) timelineEventSortKey {
+func timelineSortKey(event *RunTimelineEvent) timelineEventSortKey {
 	return timelineEventSortKey{
 		precedence: timelineEventPrecedence(event.Kind),
 		taskID:     event.TaskID,
@@ -432,7 +435,7 @@ func timelineEventPrecedence(kind string) int {
 	}
 }
 
-func (task RunGraphTask) taskClassOrDefault() protocol.TaskClass {
+func (task *RunGraphTask) taskClassOrDefault() protocol.TaskClass {
 	if task.Task.TaskClass != "" {
 		return task.Task.TaskClass
 	}

@@ -417,7 +417,7 @@ func TestFormatRunSummaryGroupsItemsWithoutTaskDetailSprawl(t *testing.T) {
 	if escalatedIndex == -1 || underReviewIndex == -1 || completedIndex == -1 {
 		t.Fatalf("expected grouped bucket headers in output\noutput:\n%s", output)
 	}
-	if !(escalatedIndex < underReviewIndex && underReviewIndex < completedIndex) {
+	if escalatedIndex >= underReviewIndex || underReviewIndex >= completedIndex {
 		t.Fatalf("expected stable bucket ordering\noutput:\n%s", output)
 	}
 	if strings.Contains(output, "Blocked (") || strings.Contains(output, "Waiting (") || strings.Contains(output, "Pending (") {
@@ -475,9 +475,9 @@ func mustFindSummaryItem(t *testing.T, summary *RunSummary, sourceTaskID protoco
 		t.Fatalf("summary should not be nil")
 	}
 
-	for _, item := range summary.Items {
-		if item.SourceTaskID == sourceTaskID {
-			return item
+	for i := range summary.Items {
+		if summary.Items[i].SourceTaskID == sourceTaskID {
+			return summary.Items[i]
 		}
 	}
 
@@ -490,8 +490,8 @@ func hasSummaryItem(summary *RunSummary, sourceTaskID protocol.TaskID) bool {
 		return false
 	}
 
-	for _, item := range summary.Items {
-		if item.SourceTaskID == sourceTaskID {
+	for i := range summary.Items {
+		if summary.Items[i].SourceTaskID == sourceTaskID {
 			return true
 		}
 	}

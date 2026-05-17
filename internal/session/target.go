@@ -42,8 +42,8 @@ func ListTargetStatuses(stateDir string) ([]TargetStatus, error) {
 	}
 
 	statuses := make([]TargetStatus, 0, len(targets))
-	for _, target := range targets {
-		report, err := loadTargetStatusReport(stateDir, cfg, target)
+	for i := range targets {
+		report, err := loadTargetStatusReport(stateDir, cfg, &targets[i])
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +65,7 @@ func TargetHeartbeat(stateDir, targetName string, availability mailbox.TargetAva
 	if err != nil {
 		return nil, err
 	}
-	report, err := buildTargetStatus(cfg, targetCfg, recorded)
+	report, err := buildTargetStatus(cfg, &targetCfg, recorded)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func DisableTarget(stateDir, targetName, reason string) (*TargetStatus, error) {
 	if _, err := mailbox.RecordTargetHeartbeat(stateDir, &target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
 		return nil, err
 	}
-	report, err := buildTargetStatus(cfg, targetCfg, recorded)
+	report, err := buildTargetStatus(cfg, &targetCfg, recorded)
 	if err != nil {
 		return nil, err
 	}
@@ -118,15 +118,15 @@ func EnableTarget(stateDir, targetName, reason string) (*TargetStatus, int, erro
 	if _, err := mailbox.RecordTargetHeartbeat(stateDir, &target, recorded.Availability, recorded.Summary, recorded.Source, nil); err != nil {
 		return nil, 0, err
 	}
-	redispatched, err := dispatchPendingForTarget(stateDir, cfg, targetCfg)
+	redispatched, err := dispatchPendingForTarget(stateDir, cfg, &targetCfg)
 	if err != nil {
 		return nil, 0, err
 	}
-	report, err := buildTargetStatus(cfg, targetCfg, recorded)
+	report, err := buildTargetStatus(cfg, &targetCfg, recorded)
 	return &report, redispatched, err
 }
 
-func loadTargetStatusReport(stateDir string, cfg *config.ResolvedConfig, target config.ExecutionTargetConfig) (TargetStatus, error) {
+func loadTargetStatusReport(stateDir string, cfg *config.ResolvedConfig, target *config.ExecutionTargetConfig) (TargetStatus, error) {
 	recorded, err := mailbox.ReadTargetState(stateDir, target.Name)
 	if err != nil && !os.IsNotExist(err) {
 		return TargetStatus{}, err
@@ -134,7 +134,7 @@ func loadTargetStatusReport(stateDir string, cfg *config.ResolvedConfig, target 
 	return buildTargetStatus(cfg, target, recorded)
 }
 
-func buildTargetStatus(cfg *config.ResolvedConfig, targetCfg config.ExecutionTargetConfig, recorded *mailbox.TargetState) (TargetStatus, error) {
+func buildTargetStatus(cfg *config.ResolvedConfig, targetCfg *config.ExecutionTargetConfig, recorded *mailbox.TargetState) (TargetStatus, error) {
 	target := protocol.ExecutionTarget{
 		Name:         targetCfg.Name,
 		Kind:         targetCfg.Kind,
@@ -166,8 +166,8 @@ func buildTargetStatus(cfg *config.ResolvedConfig, targetCfg config.ExecutionTar
 	if ts, _ := parseTimePtr(recorded.LastDispatchAt); ts != nil {
 		report.LastDispatch = ts
 	}
-	for _, dispatch := range dispatches {
-		switch dispatch.Status {
+	for i := range dispatches {
+		switch dispatches[i].Status {
 		case mailbox.TargetDispatchPending:
 			report.PendingDispatches++
 		case mailbox.TargetDispatchFailed:
@@ -177,7 +177,7 @@ func buildTargetStatus(cfg *config.ResolvedConfig, targetCfg config.ExecutionTar
 	return report, nil
 }
 
-func effectiveTargetAvailability(targetCfg config.ExecutionTargetConfig, recorded *mailbox.TargetState) (mailbox.TargetAvailability, string) {
+func effectiveTargetAvailability(targetCfg *config.ExecutionTargetConfig, recorded *mailbox.TargetState) (mailbox.TargetAvailability, string) {
 	if recorded == nil {
 		return mailbox.TargetAvailabilityUnknown, "target has not reported health yet"
 	}
@@ -199,8 +199,9 @@ func effectiveTargetAvailability(targetCfg config.ExecutionTargetConfig, recorde
 func configuredExecutionTargets(cfg *config.ResolvedConfig) ([]config.ExecutionTargetConfig, error) {
 	targets := make([]config.ExecutionTargetConfig, 0, len(cfg.ExecutionTargets)+1)
 	includeImplicitLocal := false
-	for _, agent := range cfg.Agents {
-		target, err := resolveExecutionTarget(cfg, &agent)
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
+		target, err := resolveExecutionTarget(cfg, agent)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +231,8 @@ func resolveNamedExecutionTarget(stateDir, targetName string) (*config.ResolvedC
 	if err != nil {
 		return nil, protocol.ExecutionTarget{}, config.ExecutionTargetConfig{}, err
 	}
-	for _, targetCfg := range targets {
+	for i := range targets {
+		targetCfg := &targets[i]
 		if targetCfg.Name != targetName {
 			continue
 		}
@@ -241,12 +243,12 @@ func resolveNamedExecutionTarget(stateDir, targetName string) (*config.ResolvedC
 			Capabilities: append([]string(nil), targetCfg.Capabilities...),
 			PaneBacked:   targetCfg.PaneBacked,
 		}
-		return cfg, target, targetCfg, nil
+		return cfg, target, *targetCfg, nil
 	}
 	return nil, protocol.ExecutionTarget{}, config.ExecutionTargetConfig{}, fmt.Errorf("unknown execution target %q", targetName)
 }
 
-func dispatchPendingForTarget(stateDir string, cfg *config.ResolvedConfig, targetCfg config.ExecutionTargetConfig) (int, error) {
+func dispatchPendingForTarget(stateDir string, cfg *config.ResolvedConfig, targetCfg *config.ExecutionTargetConfig) (int, error) {
 	count := 0
 	for i := range cfg.Agents {
 		agent := &cfg.Agents[i]
@@ -297,7 +299,7 @@ func dispatchPendingForTarget(stateDir string, cfg *config.ResolvedConfig, targe
 	return count, nil
 }
 
-func dispatchNonLocalTask(cfg *config.ResolvedConfig, targetCfg config.ExecutionTargetConfig, owner *config.AgentConfig, task *protocol.ChildTask) error {
+func dispatchNonLocalTask(cfg *config.ResolvedConfig, targetCfg *config.ExecutionTargetConfig, owner *config.AgentConfig, task *protocol.ChildTask) error {
 	if cfg == nil || owner == nil || task == nil {
 		return fmt.Errorf("config, owner, and task are required")
 	}
@@ -386,7 +388,7 @@ func dispatchNonLocalTask(cfg *config.ResolvedConfig, targetCfg config.Execution
 	return err
 }
 
-func targetAvailabilityForRouting(stateDir string, targetCfg config.ExecutionTargetConfig) (mailbox.TargetAvailability, string, error) {
+func targetAvailabilityForRouting(stateDir string, targetCfg *config.ExecutionTargetConfig) (mailbox.TargetAvailability, string, error) {
 	target := protocol.ExecutionTarget{
 		Name:         targetCfg.Name,
 		Kind:         targetCfg.Kind,
@@ -405,7 +407,7 @@ func targetAvailabilityForRouting(stateDir string, targetCfg config.ExecutionTar
 	return availability, summary, nil
 }
 
-func dispatchWorkingDir(cfg *config.ResolvedConfig, targetCfg config.ExecutionTargetConfig, owner *config.AgentConfig) string {
+func dispatchWorkingDir(cfg *config.ResolvedConfig, targetCfg *config.ExecutionTargetConfig, owner *config.AgentConfig) string {
 	if strings.TrimSpace(targetCfg.Dispatch.Workdir) != "" {
 		return targetCfg.Dispatch.Workdir
 	}
@@ -415,7 +417,7 @@ func dispatchWorkingDir(cfg *config.ResolvedConfig, targetCfg config.ExecutionTa
 	return cfg.Session.Workspace
 }
 
-func dispatchEnv(cfg *config.ResolvedConfig, targetCfg config.ExecutionTargetConfig, owner *config.AgentConfig, task *protocol.ChildTask) []string {
+func dispatchEnv(cfg *config.ResolvedConfig, targetCfg *config.ExecutionTargetConfig, owner *config.AgentConfig, task *protocol.ChildTask) []string {
 	values := make([]string, 0, len(targetCfg.Dispatch.Env)+11)
 	for key, value := range targetCfg.Dispatch.Env {
 		values = append(values, fmt.Sprintf("%s=%s", key, value))

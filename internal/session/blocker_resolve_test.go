@@ -17,7 +17,7 @@ func TestBlockerResolveManualRerouteRecordsResolution(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		BlockerResolveOpts{
+		&BlockerResolveOpts{
 			RunID:        fixture.run.RunID,
 			SourceTaskID: fixture.sourceTask.TaskID,
 			Action:       protocol.BlockerResolutionActionManualReroute,
@@ -67,7 +67,7 @@ func TestBlockerResolveClarifySendsDecisionMessage(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		BlockerResolveOpts{
+		&BlockerResolveOpts{
 			RunID:        fixture.run.RunID,
 			SourceTaskID: fixture.sourceTask.TaskID,
 			Action:       protocol.BlockerResolutionActionClarify,
@@ -124,7 +124,7 @@ func TestBlockerResolveDismissMarksResolved(t *testing.T) {
 	if err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		BlockerResolveOpts{
+		&BlockerResolveOpts{
 			RunID:        fixture.run.RunID,
 			SourceTaskID: fixture.sourceTask.TaskID,
 			Action:       protocol.BlockerResolutionActionDismiss,
@@ -171,7 +171,7 @@ func TestBlockerResolvePartialReplanCreatesReplacementTaskAndArtifact(t *testing
 	err := BlockerResolve(
 		fixture.cfg.Session.StateDir,
 		store,
-		BlockerResolveOpts{
+		&BlockerResolveOpts{
 			RunID:          fixture.run.RunID,
 			SourceTaskID:   fixture.sourceTask.TaskID,
 			Action:         protocol.BlockerResolutionActionPartialReplan,
@@ -254,7 +254,7 @@ func TestBlockerResolvePartialReplanRejectsExistingArtifactOrNonEscalatedBlocker
 		store := mailbox.NewStore(fixture.cfg.Session.StateDir)
 		coordinatorStore := mailbox.NewCoordinatorStore(fixture.cfg.Session.StateDir)
 
-		replacementTask, err := AddChildTask(fixture.cfg, store, ChildTaskRequest{
+		replacementTask, err := AddChildTask(fixture.cfg, store, &ChildTaskRequest{
 			ParentRunID:    fixture.run.RunID,
 			Owner:          "backend-low",
 			Goal:           "Existing bounded replacement",
@@ -288,7 +288,7 @@ func TestBlockerResolvePartialReplanRejectsExistingArtifactOrNonEscalatedBlocker
 		err = BlockerResolve(
 			fixture.cfg.Session.StateDir,
 			store,
-			BlockerResolveOpts{
+			&BlockerResolveOpts{
 				RunID:          fixture.run.RunID,
 				SourceTaskID:   fixture.sourceTask.TaskID,
 				Action:         protocol.BlockerResolutionActionPartialReplan,
@@ -322,7 +322,7 @@ func TestBlockerResolvePartialReplanRejectsExistingArtifactOrNonEscalatedBlocker
 		err := BlockerResolve(
 			fixture.cfg.Session.StateDir,
 			store,
-			BlockerResolveOpts{
+			&BlockerResolveOpts{
 				RunID:          fixture.run.RunID,
 				SourceTaskID:   fixture.sourceTask.TaskID,
 				Action:         protocol.BlockerResolutionActionPartialReplan,
@@ -379,7 +379,7 @@ func seedEscalatedBlockerFixture(t *testing.T, recommended protocol.BlockerResol
 		UpdatedAt:   now,
 		EscalatedAt: &now,
 	}
-	seedExistingBlockerCase(t, fixture, blockerCase)
+	seedExistingBlockerCase(t, fixture, &blockerCase)
 
 	return escalatedBlockerFixture{
 		blockerPolicyFixture: fixture,

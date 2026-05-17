@@ -424,10 +424,7 @@ func selectBlockerAction(waitKind protocol.WaitKind, blockKind protocol.BlockKin
 		return action
 	}
 
-	switch blockKind {
-	default:
-		return protocol.BlockerActionEscalate
-	}
+	return protocol.BlockerActionEscalate
 }
 
 func resolveBlockerCeiling(cfg *config.ResolvedConfig, sourceTask *protocol.ChildTask) int {
@@ -502,7 +499,7 @@ func rerouteBlockerTask(activeTask *activeTaskContext, coordinatorTask *coordina
 		req.OverrideReason = rerouteOverrideReason(reason, sourceTask.TaskID, coordinatorTask.currentTask.Owner)
 	}
 
-	reroutedTask, _, err := RouteChildTask(activeTask.cfg, activeTask.store, req)
+	reroutedTask, _, err := RouteChildTask(activeTask.cfg, activeTask.store, &req)
 	if err != nil {
 		if restoreErr := restoreReceipt(); restoreErr != nil {
 			return nil, fmt.Errorf("restore current receipt after reroute failure: %w", restoreErr)
@@ -778,7 +775,7 @@ func createReviewHandoffAfterTaskDone(stateDir string, store *mailbox.Store, msg
 }
 
 func routeReviewTask(cfg *config.ResolvedConfig, store *mailbox.Store, sourceTask *protocol.ChildTask) (*protocol.ChildTask, error) {
-	reviewTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	reviewTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          sourceTask.ParentRunID,
 		TaskClass:      protocol.TaskClassReview,
 		Domains:        append([]string(nil), sourceTask.NormalizedDomains...),

@@ -48,16 +48,6 @@ type RunSummaryItem struct {
 	BlockerRecommendedAction *protocol.RecommendedAction
 }
 
-const runSummarySectionLabels = `
-Summary:
-Escalated (
-Blocked (
-Waiting (
-Under Review (
-Pending (
-Completed (
-`
-
 func BuildRunSummary(graph *RunGraph) *RunSummary {
 	if graph == nil {
 		return nil
@@ -119,7 +109,8 @@ func FormatRunSummary(summary *RunSummary) string {
 		}
 
 		fmt.Fprintf(&builder, "%s (%d)\n", summaryBucketTitle(status), len(items))
-		for _, item := range items {
+		for i := range items {
+			item := &items[i]
 			fmt.Fprintf(&builder, "- %s | owner=%s | %s | %s\n",
 				item.Status,
 				formatSummaryOwner(item),
@@ -228,9 +219,9 @@ func deriveRunSummaryStatus(sourceTask *RunGraphTask, effectiveTask *RunGraphTas
 
 func summaryItemsForStatus(items []RunSummaryItem, status RunSummaryStatus) []RunSummaryItem {
 	filtered := make([]RunSummaryItem, 0, len(items))
-	for _, item := range items {
-		if item.Status == status {
-			filtered = append(filtered, item)
+	for i := range items {
+		if items[i].Status == status {
+			filtered = append(filtered, items[i])
 		}
 	}
 
@@ -256,7 +247,7 @@ func summaryBucketTitle(status RunSummaryStatus) string {
 	}
 }
 
-func formatSummaryOwner(item RunSummaryItem) string {
+func formatSummaryOwner(item *RunSummaryItem) string {
 	switch {
 	case item.Owner != "":
 		return string(item.Owner)
@@ -269,7 +260,7 @@ func formatSummaryOwner(item RunSummaryItem) string {
 	}
 }
 
-func formatSummaryRefs(item RunSummaryItem) string {
+func formatSummaryRefs(item *RunSummaryItem) string {
 	refs := []string{
 		fmt.Sprintf("task=%s", displayTaskID(item.SourceTaskID)),
 		fmt.Sprintf("msg=%s", displayMessageID(item.SourceMessageID)),
@@ -288,7 +279,7 @@ func formatSummaryRefs(item RunSummaryItem) string {
 	return strings.Join(refs, " ")
 }
 
-func formatSummaryOptionalDetail(item RunSummaryItem) string {
+func formatSummaryOptionalDetail(item *RunSummaryItem) string {
 	parts := make([]string, 0, 4)
 	if item.ReviewOutcome != "" {
 		parts = append(parts, fmt.Sprintf("review outcome=%s", item.ReviewOutcome))

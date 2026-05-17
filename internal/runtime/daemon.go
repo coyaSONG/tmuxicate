@@ -483,7 +483,8 @@ func isPaneManagedAgent(cfg *config.ResolvedConfig, agent *config.AgentConfig) b
 		return true
 	}
 
-	for _, target := range cfg.ExecutionTargets {
+	for i := range cfg.ExecutionTargets {
+		target := &cfg.ExecutionTargets[i]
 		if target.Name != targetName {
 			continue
 		}

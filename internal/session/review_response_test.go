@@ -86,7 +86,7 @@ func TestReviewRespondRejectsUnlinkedOrWrongOwnerResponse(t *testing.T) {
 		}
 
 		store := mailbox.NewStore(fixture.cfg.Session.StateDir)
-		reviewTask, _, err := RouteChildTask(fixture.cfg, store, protocol.RouteChildTaskRequest{
+		reviewTask, _, err := RouteChildTask(fixture.cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          fixture.run.RunID,
 			TaskClass:      protocol.TaskClassReview,
 			Domains:        []string{"protocol", "session"},

@@ -39,7 +39,7 @@ type RunRootMessageInput struct {
 	Run protocol.CoordinatorRun
 }
 
-func (r RunRequest) Validate(cfg *config.ResolvedConfig) error {
+func (r *RunRequest) Validate(cfg *config.ResolvedConfig) error {
 	if strings.TrimSpace(r.Goal) == "" {
 		return fmt.Errorf("goal is required")
 	}
@@ -59,7 +59,7 @@ func (r RunRequest) Validate(cfg *config.ResolvedConfig) error {
 	return nil
 }
 
-func (r ChildTaskRequest) Validate() error {
+func (r *ChildTaskRequest) Validate() error {
 	task := protocol.ChildTask{
 		TaskID:            protocol.NewTaskID(1),
 		ParentRunID:       r.ParentRunID,
@@ -85,31 +85,32 @@ func (r ChildTaskRequest) Validate() error {
 	return task.Validate()
 }
 
-func BuildRunRootMessageBody(input RunRootMessageInput) (string, error) {
+func BuildRunRootMessageBody(input *RunRootMessageInput) (string, error) {
 	if err := input.Run.Validate(); err != nil {
 		return "", fmt.Errorf("validate run root message input: %w", err)
 	}
 
 	var body strings.Builder
 	body.WriteString("# Coordinator Run\n\n")
-	body.WriteString(fmt.Sprintf("Goal: %s\n", input.Run.Goal))
-	body.WriteString(fmt.Sprintf("Coordinator: %s\n\n", input.Run.Coordinator))
+	fmt.Fprintf(&body, "Goal: %s\n", input.Run.Goal)
+	fmt.Fprintf(&body, "Coordinator: %s\n\n", input.Run.Coordinator)
 	body.WriteString("## Decomposition Instructions\n")
 	body.WriteString("Decompose this run into bounded child tasks for allowed owners only.\n")
 	body.WriteString("Request a routed owner through the canonical CLI entrypoint instead of guessing owners in pane text:\n")
-	body.WriteString(fmt.Sprintf("tmuxicate run route-task --run %s --task-class <class> --domain <domain> --goal \"<goal>\" --expected-output \"<deliverable>\"\n\n", input.Run.RunID))
+	fmt.Fprintf(&body, "tmuxicate run route-task --run %s --task-class <class> --domain <domain> --goal \"<goal>\" --expected-output \"<deliverable>\"\n\n", input.Run.RunID)
 	body.WriteString("Use `tmuxicate run add-task` only after routing has chosen the owner or when persisting an explicit owner override.\n")
 	body.WriteString("Each task must include owner, goal, expected output, dependency IDs, and whether review is required.\n\n")
 	body.WriteString("## Run References\n")
-	body.WriteString(fmt.Sprintf("run_id: %s\n", input.Run.RunID))
-	body.WriteString(fmt.Sprintf("root_message_id: %s\n", input.Run.RootMessageID))
-	body.WriteString(fmt.Sprintf("root_thread_id: %s\n", input.Run.RootThreadID))
+	fmt.Fprintf(&body, "run_id: %s\n", input.Run.RunID)
+	fmt.Fprintf(&body, "root_message_id: %s\n", input.Run.RootMessageID)
+	fmt.Fprintf(&body, "root_thread_id: %s\n", input.Run.RootThreadID)
 
 	return body.String(), nil
 }
 
 func matchesAgentNameOrAlias(cfg *config.ResolvedConfig, target string) bool {
-	for _, agent := range cfg.Agents {
+	for i := range cfg.Agents {
+		agent := &cfg.Agents[i]
 		if agent.Name == target || agent.Alias == target {
 			return true
 		}
@@ -117,7 +118,7 @@ func matchesAgentNameOrAlias(cfg *config.ResolvedConfig, target string) bool {
 	return false
 }
 
-func childTaskRequestHasRoutingMetadata(req ChildTaskRequest) bool {
+func childTaskRequestHasRoutingMetadata(req *ChildTaskRequest) bool {
 	return req.TaskClass != "" ||
 		len(req.Domains) > 0 ||
 		len(req.NormalizedDomains) > 0 ||

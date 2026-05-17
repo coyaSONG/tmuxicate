@@ -13,12 +13,15 @@ import (
 	"github.com/coyaSONG/tmuxicate/internal/protocol"
 )
 
-func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*protocol.CoordinatorRun, error) {
+func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req *RunRequest) (*protocol.CoordinatorRun, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("resolved config is required")
 	}
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("run request is required")
 	}
 	if err := req.Validate(cfg); err != nil {
 		return nil, err
@@ -62,7 +65,7 @@ func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*pro
 
 	// Build the canonical root contract with `## Decomposition Instructions`,
 	// `## Run References`, and the `tmuxicate run route-task --run` command prefix.
-	body, err := BuildRunRootMessageBody(RunRootMessageInput{Run: run})
+	body, err := BuildRunRootMessageBody(&RunRootMessageInput{Run: run})
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +75,7 @@ func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*pro
 		return nil, err
 	}
 
-	if err := createWorkflowMessage(cfg, store, workflowMessageInput{
+	if err := createWorkflowMessage(cfg, store, &workflowMessageInput{
 		Seq:           messageSeq,
 		MessageID:     run.RootMessageID,
 		ThreadID:      run.RootThreadID,
@@ -94,12 +97,15 @@ func Run(cfg *config.ResolvedConfig, store *mailbox.Store, req RunRequest) (*pro
 	return &run, nil
 }
 
-func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTaskRequest) (*protocol.ChildTask, error) {
+func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req *ChildTaskRequest) (*protocol.ChildTask, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("resolved config is required")
 	}
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("child task request is required")
 	}
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -141,7 +147,9 @@ func AddChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req ChildTas
 	return addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, owner, req)
 }
 
-func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.Store, coordinatorStore *mailbox.CoordinatorStore, run *protocol.CoordinatorRun, owner *config.AgentConfig, req ChildTaskRequest) (*protocol.ChildTask, error) {
+
+
+func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.Store, coordinatorStore *mailbox.CoordinatorStore, run *protocol.CoordinatorRun, owner *config.AgentConfig, req *ChildTaskRequest) (*protocol.ChildTask, error) {
 	var routingDecision *protocol.RoutingDecision
 	if childTaskRequestHasRoutingMetadata(req) {
 		decision := req.RoutingDecision
@@ -208,7 +216,7 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 		messageKind = protocol.KindReviewRequest
 	}
 
-	if err := createWorkflowMessage(cfg, store, workflowMessageInput{
+	if err := createWorkflowMessage(cfg, store, &workflowMessageInput{
 		Seq:           messageSeq,
 		MessageID:     task.MessageID,
 		ThreadID:      task.ThreadID,
@@ -233,7 +241,7 @@ func addChildTaskWithResolvedOwner(cfg *config.ResolvedConfig, store *mailbox.St
 	if err != nil {
 		return nil, err
 	}
-	if err := dispatchNonLocalTask(cfg, targetCfg, owner, &task); err != nil {
+	if err := dispatchNonLocalTask(cfg, &targetCfg, owner, &task); err != nil {
 		return nil, err
 	}
 
@@ -251,9 +259,12 @@ type RoutePreview struct {
 	Decision      *protocol.RoutingDecision
 }
 
-func PreviewRouteChildTask(cfg *config.ResolvedConfig, req protocol.RouteChildTaskRequest) (*RoutePreview, error) {
+func PreviewRouteChildTask(cfg *config.ResolvedConfig, req *protocol.RouteChildTaskRequest) (*RoutePreview, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("resolved config is required")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("route child task request is required")
 	}
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -290,12 +301,15 @@ func PreviewRouteChildTask(cfg *config.ResolvedConfig, req protocol.RouteChildTa
 	}, nil
 }
 
-func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protocol.RouteChildTaskRequest) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
+func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req *protocol.RouteChildTaskRequest) (*protocol.ChildTask, *protocol.RoutingDecision, error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("resolved config is required")
 	}
 	if store == nil {
 		return nil, nil, fmt.Errorf("store is required")
+	}
+	if req == nil {
+		return nil, nil, fmt.Errorf("route child task request is required")
 	}
 	if err := req.Validate(); err != nil {
 		return nil, nil, err
@@ -327,7 +341,7 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 		return nil, nil, err
 	}
 
-	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, selectedOwner, ChildTaskRequest{
+	task, err := addChildTaskWithResolvedOwner(cfg, store, coordinatorStore, run, selectedOwner, &ChildTaskRequest{
 		ParentRunID:       req.RunID,
 		Owner:             selectedOwner.Name,
 		Goal:              req.Goal,
@@ -347,7 +361,7 @@ func RouteChildTask(cfg *config.ResolvedConfig, store *mailbox.Store, req protoc
 	return task, decision, nil
 }
 
-func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun, req protocol.RouteChildTaskRequest, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
+func selectRoutedOwner(cfg *config.ResolvedConfig, run *protocol.CoordinatorRun, req *protocol.RouteChildTaskRequest, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
 	kindCandidates, domainCandidates := routeCandidates(cfg, run.AllowedOwners, req.TaskClass, req.Domains)
 	filteredKindCandidates, excludedTargets, err := filterCandidatesByTargetAvailability(cfg, kindCandidates)
 	if err != nil {
@@ -436,7 +450,7 @@ type workflowMessageInput struct {
 	Meta          map[string]string
 }
 
-func createWorkflowMessage(cfg *config.ResolvedConfig, store *mailbox.Store, input workflowMessageInput) error {
+func createWorkflowMessage(cfg *config.ResolvedConfig, store *mailbox.Store, input *workflowMessageInput) error {
 	payload := []byte(input.Body)
 	if !strings.HasSuffix(input.Body, "\n") {
 		payload = append(payload, '\n')
@@ -590,7 +604,8 @@ func resolveExecutionTarget(cfg *config.ResolvedConfig, agent *config.AgentConfi
 		}, nil
 	}
 
-	for _, target := range cfg.ExecutionTargets {
+	for i := range cfg.ExecutionTargets {
+		target := &cfg.ExecutionTargets[i]
 		if target.Name != targetName {
 			continue
 		}
@@ -621,9 +636,10 @@ func resolveExecutionTargetConfig(cfg *config.ResolvedConfig, agent *config.Agen
 			PaneBacked:   target.PaneBacked,
 		}, nil
 	}
-	for _, targetCfg := range cfg.ExecutionTargets {
+	for i := range cfg.ExecutionTargets {
+		targetCfg := &cfg.ExecutionTargets[i]
 		if targetCfg.Name == target.Name {
-			return targetCfg, nil
+			return *targetCfg, nil
 		}
 	}
 	return config.ExecutionTargetConfig{}, fmt.Errorf("unknown execution target config %q", target.Name)
@@ -655,7 +671,7 @@ func routeCandidates(cfg *config.ResolvedConfig, allowedOwners []protocol.AgentN
 	return kindCandidates, domainCandidates
 }
 
-func routeChildTaskOverrideSelection(cfg *config.ResolvedConfig, req protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
+func routeChildTaskOverrideSelection(cfg *config.ResolvedConfig, req *protocol.RouteChildTaskRequest, run *protocol.CoordinatorRun, kindCandidates []routeCandidate, existingDuplicate *protocol.ChildTask) (*config.AgentConfig, *protocol.RoutingDecision, error) {
 	owner, err := resolveAgentConfig(cfg, string(req.OwnerOverride))
 	if err != nil {
 		return nil, nil, err
@@ -667,7 +683,7 @@ func routeChildTaskOverrideSelection(cfg *config.ResolvedConfig, req protocol.Ro
 	if err != nil {
 		return nil, nil, err
 	}
-	availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, targetCfg)
+	availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, &targetCfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -811,9 +827,8 @@ func roleCoversDomains(role config.RoleSpec, domains []string) bool {
 
 func routeSuggestions(taskClass protocol.TaskClass, candidates []routeCandidate, excludedTargets []protocol.RouteTargetExclusion) []string {
 	if len(candidates) == 0 {
-		suggestions := []string{
-			fmt.Sprintf("Choose a different task_class or add an allowed owner with role.kind %q.", taskClass),
-		}
+		suggestions := make([]string, 0, 1+len(excludedTargets))
+		suggestions = append(suggestions, fmt.Sprintf("Choose a different task_class or add an allowed owner with role.kind %q.", taskClass))
 		for _, exclusion := range excludedTargets {
 			suggestions = append(suggestions, fmt.Sprintf("Restore target %s for owner %s (%s).", exclusion.TargetName, exclusion.Owner, exclusion.Status))
 		}
@@ -839,7 +854,7 @@ func filterCandidatesByTargetAvailability(cfg *config.ResolvedConfig, candidates
 		if err != nil {
 			return nil, nil, err
 		}
-		availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, targetCfg)
+		availability, summary, err := targetAvailabilityForRouting(cfg.Session.StateDir, &targetCfg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -909,7 +924,8 @@ func findActiveDuplicateTask(stateDir string, runID protocol.RunID, duplicateKey
 		return nil, err
 	}
 
-	for _, task := range tasks {
+	for i := range tasks {
+		task := &tasks[i]
 		if task.DuplicateKey != duplicateKey {
 			continue
 		}
@@ -922,7 +938,7 @@ func findActiveDuplicateTask(stateDir string, runID protocol.RunID, duplicateKey
 			continue
 		}
 
-		matched := task
+		matched := *task
 		return &matched, nil
 	}
 
@@ -956,12 +972,12 @@ func buildChildTaskBody(run *protocol.CoordinatorRun, task *protocol.ChildTask) 
 	}
 	body.WriteString("Reply with `tmuxicate reply <message-id>` and use `tmuxicate task` subcommands for state changes instead of raw pane text.\n\n")
 	body.WriteString("## Run References\n")
-	body.WriteString(fmt.Sprintf("run_id: %s\n", run.RunID))
-	body.WriteString(fmt.Sprintf("task_id: %s\n", task.TaskID))
-	body.WriteString(fmt.Sprintf("parent_run_id: %s\n", task.ParentRunID))
-	body.WriteString(fmt.Sprintf("review_required: %t\n", task.ReviewRequired))
-	body.WriteString(fmt.Sprintf("root_message_id: %s\n", run.RootMessageID))
-	body.WriteString(fmt.Sprintf("thread_id: %s\n", task.ThreadID))
+	fmt.Fprintf(&body, "run_id: %s\n", run.RunID)
+	fmt.Fprintf(&body, "task_id: %s\n", task.TaskID)
+	fmt.Fprintf(&body, "parent_run_id: %s\n", task.ParentRunID)
+	fmt.Fprintf(&body, "review_required: %t\n", task.ReviewRequired)
+	fmt.Fprintf(&body, "root_message_id: %s\n", run.RootMessageID)
+	fmt.Fprintf(&body, "thread_id: %s\n", task.ThreadID)
 
 	return body.String()
 }

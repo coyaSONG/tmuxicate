@@ -169,7 +169,7 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			run, err := session.Run(cfg, mailbox.NewStore(cfg.Session.StateDir), session.RunRequest{
+			run, err := session.Run(cfg, mailbox.NewStore(cfg.Session.StateDir), &session.RunRequest{
 				Goal:        strings.Join(args, " "),
 				Coordinator: coordinator,
 				CreatedBy:   "human",
@@ -216,7 +216,7 @@ func newRunAddTaskCmd() *cobra.Command {
 				dependencyIDs = append(dependencyIDs, protocol.TaskID(dep))
 			}
 
-			task, err := session.AddChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), session.ChildTaskRequest{
+			task, err := session.AddChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), &session.ChildTaskRequest{
 				ParentRunID:    protocol.RunID(runID),
 				Owner:          owner,
 				Goal:           goal,
@@ -281,14 +281,14 @@ func newRunRouteTaskCmd() *cobra.Command {
 			}
 
 			if dryRun {
-				preview, err := session.PreviewRouteChildTask(cfg, req)
+				preview, err := session.PreviewRouteChildTask(cfg, &req)
 				if err != nil {
 					return err
 				}
 				return printRouteTaskSelection(cmd.OutOrStdout(), "", preview.SelectedOwner, preview.Placement, preview.Decision, true)
 			}
 
-			task, decision, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), req)
+			task, decision, err := session.RouteChildTask(cfg, mailbox.NewStore(cfg.Session.StateDir), &req)
 			if err != nil {
 				return err
 			}
@@ -549,7 +549,7 @@ func newBlockerResolveCmd() *cobra.Command {
 			}
 
 			store := mailbox.NewStore(resolvedStateDir)
-			if err := session.BlockerResolve(resolvedStateDir, store, opts); err != nil {
+			if err := session.BlockerResolve(resolvedStateDir, store, &opts); err != nil {
 				return err
 			}
 
@@ -1127,9 +1127,9 @@ func newTargetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, status := range statuses {
-				if status.Name == args[0] {
-					printTargetStatus(status)
+			for i := range statuses {
+				if statuses[i].Name == args[0] {
+					printTargetStatus(&statuses[i])
 					return nil
 				}
 			}
@@ -1157,7 +1157,7 @@ func newTargetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printTargetStatus(*report)
+			printTargetStatus(report)
 			return nil
 		},
 	}
@@ -1180,7 +1180,7 @@ func newTargetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printTargetStatus(*report)
+			printTargetStatus(report)
 			return nil
 		},
 	}
@@ -1201,7 +1201,7 @@ func newTargetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printTargetStatus(*report)
+			printTargetStatus(report)
 			fmt.Printf("Redispatched: %d\n", redispatched)
 			return nil
 		},
@@ -1514,7 +1514,8 @@ func printStatusReport(report *session.StatusReport) {
 		fmt.Println("TARGET")
 		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "NAME\tKIND\tAVAILABILITY\tPENDING\tFAILED\tLAST-DISPATCH\tSUMMARY")
-		for _, target := range report.TargetStatuses {
+		for i := range report.TargetStatuses {
+			target := &report.TargetStatuses[i]
 			lastDispatch := "-"
 			if target.LastDispatch != nil {
 				lastDispatch = formatAge(time.Since(*target.LastDispatch))
@@ -1566,7 +1567,8 @@ func parseTargetAvailability(raw string) (mailbox.TargetAvailability, error) {
 func printTargetStatuses(statuses []session.TargetStatus) {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "NAME\tKIND\tAVAILABILITY\tPENDING\tFAILED\tLAST-HEARTBEAT\tLAST-DISPATCH\tSUMMARY")
-	for _, status := range statuses {
+	for i := range statuses {
+		status := &statuses[i]
 		lastHeartbeat := "-"
 		if status.LastHeartbeat != nil {
 			lastHeartbeat = formatAge(time.Since(*status.LastHeartbeat))
@@ -1589,7 +1591,7 @@ func printTargetStatuses(statuses []session.TargetStatus) {
 	_ = tw.Flush()
 }
 
-func printTargetStatus(status session.TargetStatus) {
+func printTargetStatus(status *session.TargetStatus) {
 	fmt.Printf("Target: %s\n", status.Name)
 	fmt.Printf("Kind: %s\n", status.Kind)
 	fmt.Printf("Availability: %s\n", status.Availability)

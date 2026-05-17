@@ -102,7 +102,7 @@ func TestRunRootMessageContractUsesRouteTaskCommand(t *testing.T) {
 		},
 	}
 
-	body, err := BuildRunRootMessageBody(RunRootMessageInput{
+	body, err := BuildRunRootMessageBody(&RunRootMessageInput{
 		Run: run,
 	})
 	if err != nil {
@@ -133,7 +133,7 @@ func TestRouteChildTaskSelectsDeterministicOwner(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route an implementation task to the most specific backend owner",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -142,7 +142,7 @@ func TestRouteChildTaskSelectsDeterministicOwner(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -179,7 +179,7 @@ func TestRouteChildTaskRejectsNoMatchWithStructuredReason(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route an implementation task to the most specific backend owner",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -188,7 +188,7 @@ func TestRouteChildTaskRejectsNoMatchWithStructuredReason(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	_, _, err = RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"frontend"},
@@ -230,7 +230,7 @@ func TestRouteChildTaskBlocksExclusiveDuplicate(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route implementation work without duplicate execution",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -239,7 +239,7 @@ func TestRouteChildTaskBlocksExclusiveDuplicate(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	firstTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	firstTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -253,7 +253,7 @@ func TestRouteChildTaskBlocksExclusiveDuplicate(t *testing.T) {
 	const duplicateKeyTemplate = "run_<id>|implementation|protocol,session"
 	wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
 
-	_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	_, _, err = RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"protocol", "session"},
@@ -282,7 +282,7 @@ func TestRouteChildTaskAllowsFanoutReviewClass(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Allow explicit review fanout for the same normalized domains",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -291,7 +291,7 @@ func TestRouteChildTaskAllowsFanoutReviewClass(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	firstTask, firstDecision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	firstTask, firstDecision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassReview,
 		Domains:        []string{"session", "protocol"},
@@ -302,7 +302,7 @@ func TestRouteChildTaskAllowsFanoutReviewClass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first route child task: %v", err)
 	}
-	secondTask, secondDecision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	secondTask, secondDecision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassReview,
 		Domains:        []string{"protocol", "session"},
@@ -327,7 +327,7 @@ func TestRouteChildTaskAppliesAdaptivePreferenceWithinEligibleCandidates(t *test
 
 	cfg := testAdaptiveRoutingConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route implementation work with adaptive preference evidence",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -365,7 +365,7 @@ func TestRouteChildTaskAppliesAdaptivePreferenceWithinEligibleCandidates(t *test
 		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
 	}
 
-	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -395,7 +395,7 @@ func TestRouteChildTaskFallsBackToBaselineWhenAdaptiveScoresTieOrMissing(t *test
 
 		cfg := testAdaptiveRoutingConfig(t)
 		store := mailbox.NewStore(cfg.Session.StateDir)
-		run, err := Run(cfg, store, RunRequest{
+		run, err := Run(cfg, store, &RunRequest{
 			Goal:        "Keep the deterministic baseline when no adaptive row matches",
 			Coordinator: "pm",
 			CreatedBy:   "human",
@@ -404,7 +404,7 @@ func TestRouteChildTaskFallsBackToBaselineWhenAdaptiveScoresTieOrMissing(t *test
 			t.Fatalf("run: %v", err)
 		}
 
-		task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          run.RunID,
 			TaskClass:      protocol.TaskClassImplementation,
 			Domains:        []string{"session", "protocol"},
@@ -427,7 +427,7 @@ func TestRouteChildTaskFallsBackToBaselineWhenAdaptiveScoresTieOrMissing(t *test
 
 		cfg := testAdaptiveRoutingConfig(t)
 		store := mailbox.NewStore(cfg.Session.StateDir)
-		run, err := Run(cfg, store, RunRequest{
+		run, err := Run(cfg, store, &RunRequest{
 			Goal:        "Keep the deterministic baseline on adaptive score ties",
 			Coordinator: "pm",
 			CreatedBy:   "human",
@@ -471,7 +471,7 @@ func TestRouteChildTaskFallsBackToBaselineWhenAdaptiveScoresTieOrMissing(t *test
 			t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
 		}
 
-		task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          run.RunID,
 			TaskClass:      protocol.TaskClassImplementation,
 			Domains:        []string{"session", "protocol"},
@@ -495,7 +495,7 @@ func TestRouteChildTaskPersistsAdaptiveExplanation(t *testing.T) {
 
 	cfg := testAdaptiveRoutingConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Persist adaptive explanation fields on the canonical routing decision",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -533,7 +533,7 @@ func TestRouteChildTaskPersistsAdaptiveExplanation(t *testing.T) {
 		t.Fatalf("WriteAdaptiveRoutingPreferences() unexpected error: %v", err)
 	}
 
-	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -582,7 +582,7 @@ func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 		cfg := testRouteTaskConfig(t)
 		store := mailbox.NewStore(cfg.Session.StateDir)
 
-		run, err := Run(cfg, store, RunRequest{
+		run, err := Run(cfg, store, &RunRequest{
 			Goal:        "Validate owner override guardrails",
 			Coordinator: "pm",
 			CreatedBy:   "human",
@@ -591,7 +591,7 @@ func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 			t.Fatalf("run: %v", err)
 		}
 
-		_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		_, _, err = RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          run.RunID,
 			TaskClass:      protocol.TaskClassImplementation,
 			Domains:        []string{"session", "protocol"},
@@ -613,7 +613,7 @@ func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 		cfg := testRouteTaskConfig(t)
 		store := mailbox.NewStore(cfg.Session.StateDir)
 
-		run, err := Run(cfg, store, RunRequest{
+		run, err := Run(cfg, store, &RunRequest{
 			Goal:        "Validate override behavior against duplicate policy",
 			Coordinator: "pm",
 			CreatedBy:   "human",
@@ -622,7 +622,7 @@ func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 			t.Fatalf("run: %v", err)
 		}
 
-		firstTask, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		firstTask, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          run.RunID,
 			TaskClass:      protocol.TaskClassImplementation,
 			Domains:        []string{"session", "protocol"},
@@ -634,7 +634,7 @@ func TestRouteChildTaskRequiresOverrideReason(t *testing.T) {
 		}
 
 		wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
-		_, _, err = RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+		_, _, err = RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 			RunID:          run.RunID,
 			TaskClass:      protocol.TaskClassImplementation,
 			Domains:        []string{"protocol", "session"},
@@ -661,7 +661,7 @@ func TestAddChildTaskRejectsDuplicateWithoutRouteDecision(t *testing.T) {
 	cfg := testRouteTaskConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Verify explicit-owner persistence re-checks duplicate routing metadata",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -671,7 +671,7 @@ func TestAddChildTaskRejectsDuplicateWithoutRouteDecision(t *testing.T) {
 	}
 
 	wantDuplicateKey := string(run.RunID) + "|implementation|protocol,session"
-	firstTask, err := AddChildTask(cfg, store, ChildTaskRequest{
+	firstTask, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:       run.RunID,
 		Owner:             "backend-high",
 		Goal:              "Persist the first routed implementation task",
@@ -692,7 +692,7 @@ func TestAddChildTaskRejectsDuplicateWithoutRouteDecision(t *testing.T) {
 		t.Fatalf("first add child task: %v", err)
 	}
 
-	_, err = AddChildTask(cfg, store, ChildTaskRequest{
+	_, err = AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:       run.RunID,
 		Owner:             "backend-low",
 		Goal:              "Persist a duplicate implementation task through add-task",
@@ -808,7 +808,7 @@ func TestRunCreatesTeamSnapshotWithExecutionTargets(t *testing.T) {
 	cfg := testExecutionTargetRouteConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Snapshot explicit and implicit execution targets",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -836,7 +836,7 @@ func TestAddChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
 	cfg := testExecutionTargetRouteConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Persist explicit placement for add-task",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -845,7 +845,7 @@ func TestAddChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+	task, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend-high",
 		Goal:           "Run sandbox implementation work",
@@ -873,7 +873,7 @@ func TestRouteChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
 	cfg := testExecutionTargetRouteConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Persist owner-derived placement during routing",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -882,7 +882,7 @@ func TestRouteChildTaskPersistsExecutionPlacementFromOwnerTarget(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -949,7 +949,7 @@ func TestRunCreatesCoordinatorArtifactsAndRootMessage(t *testing.T) {
 	cfg := testRunWorkflowConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Break the coordinator workflow into bounded child tasks",
 		Coordinator: "lead",
 		CreatedBy:   "human",
@@ -1062,7 +1062,7 @@ func TestAddChildTaskPersistsSchemaAndEmitsMailboxTask(t *testing.T) {
 	cfg := testRunWorkflowConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Break the coordinator workflow into bounded child tasks",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -1071,7 +1071,7 @@ func TestAddChildTaskPersistsSchemaAndEmitsMailboxTask(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, err := AddChildTask(cfg, store, ChildTaskRequest{
+	task, err := AddChildTask(cfg, store, &ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend",
 		Goal:           "Implement canonical run and task artifact writers",
@@ -1178,7 +1178,7 @@ func TestAddChildTaskRejectsOwnerOutsideRoutingBaseline(t *testing.T) {
 	cfg := testRunWorkflowConfig(t)
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Break the coordinator workflow into bounded child tasks",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -1209,7 +1209,7 @@ func TestAddChildTaskRejectsOwnerOutsideRoutingBaseline(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := AddChildTask(cfg, store, ChildTaskRequest{
+			_, err := AddChildTask(cfg, store, &ChildTaskRequest{
 				ParentRunID:    run.RunID,
 				Owner:          tc.owner,
 				Goal:           "Implement bounded work item",

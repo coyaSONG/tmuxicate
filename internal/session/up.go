@@ -110,7 +110,8 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 	if err != nil {
 		return err
 	}
-	for _, target := range targets {
+	for i := range targets {
+		target := &targets[i]
 		dirs = append(dirs,
 			mailbox.TargetDir(cfg.Session.StateDir, target.Name),
 			mailbox.TargetEventsDir(cfg.Session.StateDir, target.Name),
@@ -124,7 +125,8 @@ func createStateTree(cfg *config.ResolvedConfig) error {
 		}
 	}
 
-	for _, targetCfg := range targets {
+	for i := range targets {
+		targetCfg := &targets[i]
 		target := protocol.ExecutionTarget{
 			Name:         targetCfg.Name,
 			Kind:         targetCfg.Kind,

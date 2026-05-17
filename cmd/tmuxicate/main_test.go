@@ -34,6 +34,9 @@ func TestBlockerResolveCommandRequiresAction(t *testing.T) {
 		t.TempDir(),
 	})
 
+	stdoutCaptureMu.Lock()
+	defer stdoutCaptureMu.Unlock()
+
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected blocker resolve without --action to fail")
@@ -62,6 +65,9 @@ func TestBlockerResolveCommandRequiresReplacementTaskFieldsForPartialReplan(t *t
 		"replace the blocked work with one bounded implementation task",
 	})
 
+	stdoutCaptureMu.Lock()
+	defer stdoutCaptureMu.Unlock()
+
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected partial_replan blocker resolve without replacement fields to fail")
@@ -84,6 +90,9 @@ func TestBlockerResolveHelpIncludesPartialReplanFlags(t *testing.T) {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetArgs([]string{"blocker", "resolve", "--help"})
+
+	stdoutCaptureMu.Lock()
+	defer stdoutCaptureMu.Unlock()
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("help command: %v", err)
@@ -331,7 +340,7 @@ func TestRunRouteTaskCommandPrintsAdaptiveDecisionEvidence(t *testing.T) {
 
 	cfg, configPath := writeCLIConfigFiles(t, testAdaptiveCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Route one implementation task through the CLI with adaptive evidence",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -404,7 +413,7 @@ func TestRunRouteTaskDryRunShowsExecutionTargetWithoutCreatingTask(t *testing.T)
 
 	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Preview execution target placement before routing persists work",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -464,7 +473,7 @@ func TestRunRouteTaskOutputIncludesExecutionTargetAfterPersist(t *testing.T) {
 
 	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Persist execution target placement through CLI routing",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -550,7 +559,7 @@ func seedCLISummaryFixture(t *testing.T) cliSummaryFixture {
 	cfg, configPath := writeCLIConfigFiles(t, testCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Show summary output through existing CLI surfaces",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -559,7 +568,7 @@ func seedCLISummaryFixture(t *testing.T) cliSummaryFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	completedTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+	completedTask, err := session.AddChildTask(cfg, store, &session.ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend",
 		Goal:           "Finish the completed logical work item",
@@ -569,7 +578,7 @@ func seedCLISummaryFixture(t *testing.T) cliSummaryFixture {
 		t.Fatalf("add completed task: %v", err)
 	}
 
-	pendingTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+	pendingTask, err := session.AddChildTask(cfg, store, &session.ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "reviewer",
 		Goal:           "Leave one logical work item pending",
@@ -601,7 +610,7 @@ func seedCLIChildTaskFixture(t *testing.T) cliChildTaskFixture {
 	cfg, configPath := writeCLIConfigFiles(t, testCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Complete one child task without printing a run summary",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -610,7 +619,7 @@ func seedCLIChildTaskFixture(t *testing.T) cliChildTaskFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	childTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+	childTask, err := session.AddChildTask(cfg, store, &session.ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "backend",
 		Goal:           "Finish a non-root task",
@@ -634,7 +643,7 @@ func seedCLITimelineFixture(t *testing.T) cliTimelineFixture {
 	cfg, configPath := writeCLIConfigFiles(t, testExecutionTargetCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Render timeline output through the existing run show workflow",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -643,7 +652,7 @@ func seedCLITimelineFixture(t *testing.T) cliTimelineFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	sourceTask, _, err := session.RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	sourceTask, _, err := session.RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"protocol", "session"},
@@ -661,7 +670,7 @@ func seedCLITimelineFixture(t *testing.T) cliTimelineFixture {
 		t.Fatalf("complete source task: %v", err)
 	}
 
-	localTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+	localTask, err := session.AddChildTask(cfg, store, &session.ChildTaskRequest{
 		ParentRunID:    run.RunID,
 		Owner:          "reviewer",
 		Goal:           "Leave one durable local task active for timeline noise filtering",
@@ -692,7 +701,7 @@ func seedAdaptiveRoutingCLIFixture(t *testing.T) adaptiveRoutingCLIFixture {
 	cfg, configPath := writeCLIConfigFiles(t, testAdaptiveCLIConfig(t))
 	store := mailbox.NewStore(cfg.Session.StateDir)
 
-	run, err := session.Run(cfg, store, session.RunRequest{
+	run, err := session.Run(cfg, store, &session.RunRequest{
 		Goal:        "Refresh adaptive preferences only from root completion",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -701,7 +710,7 @@ func seedAdaptiveRoutingCLIFixture(t *testing.T) adaptiveRoutingCLIFixture {
 		t.Fatalf("run: %v", err)
 	}
 
-	childTask, err := session.AddChildTask(cfg, store, session.ChildTaskRequest{
+	childTask, err := session.AddChildTask(cfg, store, &session.ChildTaskRequest{
 		ParentRunID:       run.RunID,
 		Owner:             "backend-steady",
 		Goal:              "Complete one adaptive implementation task",

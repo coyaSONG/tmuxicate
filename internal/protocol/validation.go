@@ -188,7 +188,8 @@ func (r *CoordinatorRun) Validate() error {
 	if len(r.TeamSnapshot) == 0 {
 		return errors.New("team_snapshot must contain at least one agent")
 	}
-	for i, snapshot := range r.TeamSnapshot {
+	for i := range r.TeamSnapshot {
+		snapshot := &r.TeamSnapshot[i]
 		if strings.TrimSpace(string(snapshot.Name)) == "" {
 			return fmt.Errorf("team_snapshot[%d].name is required", i)
 		}
@@ -198,11 +199,10 @@ func (r *CoordinatorRun) Validate() error {
 		if strings.TrimSpace(snapshot.Role) == "" {
 			return fmt.Errorf("team_snapshot[%d].role is required", i)
 		}
-		if hasExecutionTargetMetadata(snapshot.ExecutionTarget) {
+		if hasExecutionTargetMetadata(&snapshot.ExecutionTarget) {
 			if err := validateExecutionTarget(&snapshot.ExecutionTarget); err != nil {
 				return fmt.Errorf("team_snapshot[%d].execution_target: %w", i, err)
 			}
-			r.TeamSnapshot[i].ExecutionTarget = snapshot.ExecutionTarget
 		}
 		for j, teammate := range snapshot.Teammates {
 			if strings.TrimSpace(teammate) == "" {
@@ -343,7 +343,7 @@ func validateExecutionTarget(target *ExecutionTarget) error {
 	return nil
 }
 
-func hasExecutionTargetMetadata(target ExecutionTarget) bool {
+func hasExecutionTargetMetadata(target *ExecutionTarget) bool {
 	return strings.TrimSpace(target.Name) != "" ||
 		strings.TrimSpace(target.Kind) != "" ||
 		strings.TrimSpace(target.Description) != "" ||
@@ -1028,6 +1028,7 @@ func NormalizeRouteDomains(domains []string) ([]string, error) {
 	return normalized, nil
 }
 
+//nolint:gocritic // comparator signature required by slices.IsSortedFunc
 func compareAdaptiveRoutingEvidenceRef(left, right AdaptiveRoutingEvidenceRef) int {
 	if diff := strings.Compare(string(left.RunID), string(right.RunID)); diff != 0 {
 		return diff

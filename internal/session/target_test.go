@@ -26,7 +26,7 @@ func TestRouteChildTaskDispatchesNonPaneTarget(t *testing.T) {
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Dispatch remote implementation work",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -35,7 +35,7 @@ func TestRouteChildTaskDispatchesNonPaneTarget(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -87,7 +87,7 @@ func TestRouteChildTaskSkipsDisabledTarget(t *testing.T) {
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Route work away from disabled targets",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -96,7 +96,7 @@ func TestRouteChildTaskSkipsDisabledTarget(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	task, decision, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, decision, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},
@@ -137,7 +137,7 @@ func TestEnableTargetRedispatchesPendingUnreadTasks(t *testing.T) {
 	}
 
 	store := mailbox.NewStore(cfg.Session.StateDir)
-	run, err := Run(cfg, store, RunRequest{
+	run, err := Run(cfg, store, &RunRequest{
 		Goal:        "Redispatch pending unread tasks after recovery",
 		Coordinator: "pm",
 		CreatedBy:   "human",
@@ -145,7 +145,7 @@ func TestEnableTargetRedispatchesPendingUnreadTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	task, _, err := RouteChildTask(cfg, store, protocol.RouteChildTaskRequest{
+	task, _, err := RouteChildTask(cfg, store, &protocol.RouteChildTaskRequest{
 		RunID:          run.RunID,
 		TaskClass:      protocol.TaskClassImplementation,
 		Domains:        []string{"session", "protocol"},

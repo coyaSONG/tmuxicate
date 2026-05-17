@@ -34,7 +34,7 @@ type BlockerResolveOpts struct {
 	ExpectedOutput string
 }
 
-func (o BlockerResolveOpts) Validate() error {
+func (o *BlockerResolveOpts) Validate() error {
 	if o.RunID == "" {
 		return fmt.Errorf("run_id is required")
 	}
@@ -87,9 +87,12 @@ func (o BlockerResolveOpts) Validate() error {
 	return nil
 }
 
-func BlockerResolve(stateDir string, store *mailbox.Store, opts BlockerResolveOpts) error {
+func BlockerResolve(stateDir string, store *mailbox.Store, opts *BlockerResolveOpts) error {
 	if store == nil {
 		return fmt.Errorf("store is required")
+	}
+	if opts == nil {
+		return fmt.Errorf("blocker resolve opts are required")
 	}
 	if err := opts.Validate(); err != nil {
 		return err
@@ -242,7 +245,7 @@ func BlockerResolve(stateDir string, store *mailbox.Store, opts BlockerResolveOp
 	})
 }
 
-func createPartialReplanTask(stateDir string, store *mailbox.Store, cfg *config.ResolvedConfig, coordinatorStore *mailbox.CoordinatorStore, sourceTask *protocol.ChildTask, currentTask *protocol.ChildTask, opts BlockerResolveOpts) (*protocol.ChildTask, error) {
+func createPartialReplanTask(stateDir string, store *mailbox.Store, cfg *config.ResolvedConfig, coordinatorStore *mailbox.CoordinatorStore, sourceTask *protocol.ChildTask, currentTask *protocol.ChildTask, opts *BlockerResolveOpts) (*protocol.ChildTask, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("resolved config is required")
 	}
@@ -274,7 +277,7 @@ func createPartialReplanTask(stateDir string, store *mailbox.Store, cfg *config.
 		req.OverrideReason = strings.TrimSpace(opts.Reason)
 	}
 
-	replacementTask, _, err := RouteChildTask(cfg, store, req)
+	replacementTask, _, err := RouteChildTask(cfg, store, &req)
 	if err != nil {
 		if restoreErr := restoreReceipt(); restoreErr != nil {
 			return nil, fmt.Errorf("restore superseded receipt after partial replan failure: %w", restoreErr)
