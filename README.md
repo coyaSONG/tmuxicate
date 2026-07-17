@@ -1,71 +1,126 @@
 # tmuxicate
 
-Multi-agent collaboration in tmux, backed by a file-based mailbox.
+[![CI](https://github.com/coyaSONG/tmuxicate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/coyaSONG/tmuxicate/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.26.1-00ADD8?logo=go&logoColor=white)](go.mod)
+[![GitHub stars](https://img.shields.io/github/stars/coyaSONG/tmuxicate?style=flat&logo=github)](https://github.com/coyaSONG/tmuxicate/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`tmuxicate` is a CLI for running multiple AI coding agents side by side in `tmux` and giving them a shared coordination layer. It does not try to replace `tmux`, and it does not depend on one model vendor. It uses `tmux` for visibility and process management, and a file-backed mailbox for reliable agent-to-agent communication.
+Observable multi-agent collaboration in `tmux`, backed by a durable file mailbox.
 
-The problem it solves is simple: multiple agents are useful, but without coordination they duplicate work, lose context, and get stuck in vague conversations. `tmuxicate` gives each agent a role, a pane, an inbox, and a common way to exchange tasks, reviews, questions, and status updates. One agent can act as the coordinator, while others implement, review, or research in parallel.
+`tmuxicate` gives each coding agent a pane, role, inbox, and explicit task state. A coordinator can decompose and route work, request reviews, escalate blockers, and keep a durable run record while a human watches or intervenes in the same tmux session.
 
-Under the hood, every message is written to disk as an immutable record. Each recipient gets a receipt in their inbox. A small runtime daemon watches those inboxes, checks whether a pane looks safe to notify, and injects a short instruction telling the agent to read the message with `tmuxicate read`. Agents reply with `tmuxicate reply`, and task progress is tracked with `tmuxicate task accept`, `wait`, `block`, and `done`. The filesystem is the source of truth; `tmux` is the operator interface.
+It is model-vendor neutral: Codex, Claude Code, and generic terminal commands use adapters over the same mailbox protocol. If an agent, daemon, or tmux session stops, coordination state remains on disk.
 
-For the human, the workflow is straightforward: define a session in `tmuxicate.yaml`, run `tmuxicate up`, send the coordinator a goal, and watch the team work. You can inspect inboxes, follow transcripts, send ad-hoc instructions, or intervene directly in any pane. If the daemon dies or `tmux` crashes, the mailbox still exists on disk.
+## Why tmuxicate
 
-The key design choice is reliability over magic. `tmuxicate` keeps messages durable, delivery explicit, and coordination observable. It is not trying to turn terminal agents into a distributed operating system. It is a pragmatic collaboration tool: one binary, one `tmux` session, multiple agents, shared mailboxes, clear task ownership, and a human who can see and steer the whole system.
+- **Observable by default** — panes, transcripts, status, and JSONL events remain available to the operator.
+- **Durable coordination** — immutable message bodies and per-recipient receipts use atomic filesystem updates.
+- **Explicit ownership** — tasks move through accept, wait, block, and done instead of relying on chat context.
+- **Coordinator workflows** — runs, routed child tasks, reviews, and blocker escalation have persisted artifacts.
+- **Best-effort notification, reliable reads** — the daemon only injects a short prompt; agents read the canonical message from disk.
+- **Vendor-neutral adapters** — coordination semantics do not depend on one agent CLI.
 
-## Quick Start
+## Architecture
 
-Install prerequisites:
+```mermaid
+flowchart LR
+    H[Human operator] --> CLI[tmuxicate CLI]
+    CLI --> T[tmux panes]
+    CLI --> M[(Durable mailbox)]
+    C[Coordinator run] --> M
+    M --> D[Delivery daemon]
+    D --> A[Agent adapters]
+    A --> T
+    T -->|inbox · reply · task state| CLI
+    D --> O[Heartbeat · observed state · JSONL logs]
+```
 
+The filesystem under `.tmuxicate/sessions/<session>/` is authoritative. `tmux` is the visible process layer, and pane metadata is auxiliary. Messages are immutable; mutable delivery and task state live in receipt files guarded by locks and atomic renames.
+
+## Quick start
+
+Requirements:
+
+- Go 1.26.1 or a compatible newer toolchain
 - `tmux`
-- `go` 1.24+
-- the agent CLIs you want to run (`codex`, `claude`, etc.)
+- `bash`
+- at least one terminal agent command, such as `codex` or `claude`
+- optional: `fzf` for `tmuxicate pick`
 
-Build or install:
+Install the latest tagged version:
 
 ```bash
 go install github.com/coyaSONG/tmuxicate/cmd/tmuxicate@latest
 ```
 
-For local development in this repo, build the actual CLI binary:
+Create a three-agent configuration and start it:
 
 ```bash
-go build -o tmuxicate ./cmd/tmuxicate
-```
-
-Create `tmuxicate.yaml` from the example below, or adapt the repo’s local sample config if you are working from source.
-
-Start a session:
-
-```bash
+tmuxicate init --template triad
 tmuxicate up --config tmuxicate.yaml
 ```
 
-Send work to the coordinator:
+Start a durable coordinator run:
 
 ```bash
-tmuxicate send pm "Implement X, keep tests green, ask reviewer for signoff before merge."
+tmuxicate run "Implement the feature, keep tests green, and obtain reviewer signoff"
 ```
 
-Inside an agent pane:
+Or send an ad-hoc message directly to the coordinator alias:
 
 ```bash
+tmuxicate send pm "Investigate the failing test and report the smallest safe fix."
+```
+
+Inspect the team and follow the evidence:
+
+```bash
+tmuxicate status
+tmuxicate log --all --tail 100
 tmuxicate inbox
-tmuxicate next
-tmuxicate read msg_000000000142
-printf 'Looks good. Two missing tests.\n' | tmuxicate reply msg_000000000142 --stdin
-tmuxicate task accept msg_000000000142
-tmuxicate task done msg_000000000142 --summary "Reviewed and replied"
 ```
 
-Stop the session:
+Stop the tmux session without deleting the mailbox:
 
 ```bash
 tmuxicate down --config tmuxicate.yaml
 ```
 
+## Agent workflow
+
+Inside an agent pane, coordination is explicit:
+
+```bash
+tmuxicate inbox
+tmuxicate next
+tmuxicate read msg_000000000142
+tmuxicate task accept msg_000000000142
+printf 'Implemented and verified the focused tests.\n' \
+  | tmuxicate reply msg_000000000142 --stdin
+tmuxicate task done msg_000000000142 --summary "Patch and tests ready"
+```
+
+When progress depends on another task or a human decision, use `task wait` or `task block`. The coordinator can inspect the durable run, respond to reviews, and resolve escalated blocker cases without reconstructing state from terminal scrollback.
+
+## Coordinator and operator commands
+
+| Goal | Command |
+| --- | --- |
+| Start a persisted run | `tmuxicate run <goal...>` |
+| Add or route a child task | `tmuxicate run add-task`, `tmuxicate run route-task` |
+| Inspect a run | `tmuxicate run show <run-id>` |
+| Respond to a review request | `tmuxicate review respond <message-id>` |
+| Resolve an escalated blocker | `tmuxicate blocker resolve <run-id> <task-id>` |
+| Inspect agent and daemon state | `tmuxicate status` |
+| Follow transcripts and events | `tmuxicate log` |
+| Pick a pane with fzf | `tmuxicate pick` |
+| Inspect execution targets | `tmuxicate target list`, `tmuxicate target status <target>` |
+
+Run `tmuxicate <command> --help` for the current flags and subcommands.
+
 ## Configuration
 
-Minimal triad setup:
+`tmuxicate init --template minimal` creates a small setup; `--template triad` creates a coordinator, implementer, and reviewer. A compact triad looks like this:
 
 ```yaml
 version: 1
@@ -87,6 +142,7 @@ delivery:
 transcript:
   mode: pipe-pane
   dir: .tmuxicate/sessions/dev/transcripts
+  strip_ansi: true
 
 routing:
   coordinator: coordinator
@@ -125,59 +181,40 @@ agents:
     teammates: [coordinator, backend]
 ```
 
-The full schema and design rationale live in [DESIGN.md](./DESIGN.md).
+See [DESIGN.md](DESIGN.md) for the message and receipt schemas, atomic write protocol, daemon behavior, state tree, and operator model.
 
-## CLI Reference
+## Reliability model
 
-| Command | Description |
-| --- | --- |
-| `tmuxicate up` | Create the state directory, start tmux panes, generate agent artifacts, and launch the daemon. |
-| `tmuxicate down` | Stop the tmux session and preserve mailbox state. |
-| `tmuxicate serve` | Run the minimal runtime daemon manually. |
-| `tmuxicate send <agent> <message>` | Create a new mailbox message for an agent. |
-| `tmuxicate inbox` | List inbox entries for the current agent. |
-| `tmuxicate read <message-id>` | Read a message and move it from `unread` to `active` if needed. |
-| `tmuxicate reply <message-id>` | Reply in the parent thread. |
-| `tmuxicate next` | Read the next unread message by priority and sequence. |
-| `tmuxicate task accept <message-id>` | Accept a task and mark the agent busy. |
-| `tmuxicate task wait <message-id>` | Mark an active task as waiting. |
-| `tmuxicate task block <message-id>` | Mark an active task as blocked. |
-| `tmuxicate task done <message-id>` | Mark an active task as done. |
-| `tmuxicate status` | Operator dashboard showing agent states, inbox counts, and daemon health. |
-| `tmuxicate log` | Transcript and event viewer with `--tail`, `--follow`, `--all`, and `--raw` flags. |
-| `tmuxicate init` | Interactive config generator with minimal and triad templates. |
-| `tmuxicate pick` | Planned fzf/tmux picker; currently stubbed (v0.2). |
+- A canonical message body is written once and protected by a SHA-256 recorded in its envelope.
+- Each recipient receives a separate receipt that moves between unread, active, done, and dead states.
+- Sequence and receipt updates use file locks, staging files, `fsync`, and atomic rename.
+- The daemon watches unread receipts, retries notifications, and persists heartbeat and observed state.
+- Declared agent state and observed process state remain separate so the dashboard does not confuse claims with evidence.
+- A pane notification never contains the full task payload; it points the agent to `tmuxicate read`.
 
-## Architecture
+## Current capabilities
 
-`tmuxicate` has four core pieces:
+- YAML config generation, loading, defaulting, and validation
+- tmux session lifecycle, pane metadata, and transcript capture
+- immutable messages, receipts, inbox reading, replies, and task state transitions
+- delivery retry daemon with heartbeats and operator-visible events
+- coordinator runs with child-task routing and durable run inspection
+- review response and blocker resolution workflows
+- execution target health, enable/disable, and pending dispatch controls
+- status dashboard, log viewer, and fzf pane picker
+- generic, Codex, and Claude Code adapters
 
-- Mailbox: immutable messages on disk plus per-recipient receipts under `.tmuxicate/sessions/<id>/`.
-- Adapters: a generic adapter layer that probes panes and injects short notifications.
-- Daemon: `tmuxicate serve`, which watches unread inboxes, retries delivery, and writes heartbeat/observed state.
-- tmux: the pane manager and human-visible interface.
+## Development
 
-The mailbox is the source of truth. `tmux` is the presentation layer.
+```bash
+make build
+make test
+make lint
+```
 
-## v0.1 Status
+CI runs `go build ./...`, `go test ./... -count=1 -race`, and golangci-lint. Integration tests are available with `make test-integration` when `tmux` and the required local runtime are present.
 
-What works now:
-
-- YAML config loading and validation
-- durable message and receipt storage
-- `tmux` session creation and pane metadata
-- per-agent `run.sh` and `bootstrap.txt` generation
-- unread mailbox delivery via a minimal daemon
-- agent-facing commands: `inbox`, `read`, `reply`, `next`, and `task *`
-- operator dashboard (`status`) and transcript viewer (`log`)
-- interactive config generator (`init`)
-
-What is planned for v0.2:
-
-- richer adapter support for Codex and Claude-specific readiness signals
-- picker UI (`pick`)
-- stronger reconciliation and recovery flows
-- coordinator-friendly automation on top of the mailbox
+See the broader [AI tooling portfolio](https://coyasong.dev/portfolio) for the reliability principles shared with YouTube Research MCP and `ralph-research`.
 
 ## License
 
